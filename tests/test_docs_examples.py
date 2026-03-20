@@ -64,6 +64,9 @@ def test_documented_commands_exist_in_cli_help() -> None:
         assert command in readme
         assert command in skill
 
+    assert "setup mandated-mcp" in readme
+    assert "setup mandated-mcp" in skill
+
 
 def test_documented_env_vars_match_env_example() -> None:
     predict_root = get_predict_root()
@@ -168,3 +171,22 @@ def test_docs_explain_predictclaw_version_source_of_truth() -> None:
 
     assert "pyproject.toml" in readme_zh
     assert "仓库根目录" in readme_zh
+
+
+def test_docs_explain_mandated_mcp_one_click_install_boundary() -> None:
+    predict_root = get_predict_root()
+    readme = (predict_root / "README.md").read_text()
+    skill = (predict_root / "SKILL.md").read_text()
+    readme_zh = (predict_root / "README.zh-CN.md").read_text()
+
+    for text in [readme, skill]:
+        assert "setup mandated-mcp --install --write-env" in text
+        assert "auto-fill" in text or "auto-fill the command" in text
+        assert (
+            "do not auto-install prerequisites" in text
+            or "do not auto-install Node" in text
+        )
+
+    assert "setup mandated-mcp --install --write-env" in readme_zh
+    assert "自动回填" in readme_zh
+    assert "不会自动安装前置" in readme_zh

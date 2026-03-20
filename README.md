@@ -282,6 +282,14 @@ This is the practical bridge between PredictClaw and the Vault control plane:
 
 If your environment packages that runtime through something like an `@erc-mandated/mcp` package, point `ERC_MANDATED_MCP_COMMAND` at the launcher it installs. PredictClaw's public contract is the command path, not a hard-coded package manager dependency.
 
+If you want a one-click path, run:
+
+```bash
+uv run python scripts/predictclaw.py setup mandated-mcp --install --write-env
+```
+
+That helper detects an existing launcher first, otherwise tries `npm install -g @erc-mandated/mcp`, and then auto-fills `ERC_MANDATED_MCP_COMMAND` into the local `.env`. It does not auto-install prerequisites such as Node or npm. In other words: do not auto-install prerequisites; if those are missing, PredictClaw stops with explicit guidance.
+
 The MCP orchestrates transport and preparation; the vault contract policy authorizes what the vault can actually execute.
 
 ## Command Surface

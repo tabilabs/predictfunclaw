@@ -198,6 +198,9 @@ The optional `ERC_MANDATED_FUNDING_*` envs cap Vault→Predict transfers by per-
 - In `predict-account + ERC_MANDATED_*` overlay, `wallet status` / `wallet deposit` expose `vault-to-predict-account` funding semantics while Predict Account remains the trade identity.
 - Overlay `buy` can proceed when the Predict Account balance is sufficient; otherwise it returns deterministic `funding-required` guidance that points to `wallet deposit --json`.
 - Pure `mandated-vault` needs a working `ERC_MANDATED_MCP_COMMAND`; overlay mode also needs `ERC_MANDATED_VAULT_ASSET_ADDRESS` and `ERC_MANDATED_VAULT_AUTHORITY` for funding orchestration.
+- To detect or install the runtime and auto-fill the command entry, run `cd {baseDir} && uv run python scripts/predictclaw.py setup mandated-mcp --install --write-env`.
+- That helper installs only `@erc-mandated/mcp`; it does not auto-install prerequisites such as Node or npm.
+- In short: do not auto-install prerequisites; fail closed with explicit guidance when they are missing.
 - Hedge analysis uses OpenRouter; `OPENROUTER_API_KEY` is only required for non-fixture hedge analysis, and fixture mode stays secret-free.
 
 ```bash

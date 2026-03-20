@@ -9,7 +9,16 @@ from conftest import get_predict_root, parse_env_file_keys
 REQUIRED_LAYOUT = {
     "pyproject.toml",
     ".gitignore",
+    "template.env",
+    "template.readonly.env",
+    "template.eoa.env",
+    "template.predict-account.env",
+    "template.mandated-vault.env",
     ".env.example",
+    ".env.readonly.example",
+    ".env.eoa.example",
+    ".env.predict-account.example",
+    ".env.mandated-vault.example",
     "README.md",
     "lib/__init__.py",
     "tests/conftest.py",
@@ -64,8 +73,36 @@ def test_project_metadata_and_layout() -> None:
 
 def test_env_example_contains_required_predict_keys() -> None:
     predict_root = get_predict_root()
-    env_path = predict_root / ".env.example"
+    env_path = predict_root / "template.env"
     keys = parse_env_file_keys(env_path)
 
     missing = sorted(REQUIRED_ENV_KEYS - keys)
     assert missing == []
+
+
+def test_default_env_example_is_bootstrap_safe_for_first_install() -> None:
+    predict_root = get_predict_root()
+    env_text = (predict_root / "template.env").read_text()
+
+    assert "PREDICT_ENV=test-fixture" in env_text
+    assert "PREDICT_WALLET_MODE=read-only" in env_text
+    assert "template.readonly.env" in env_text
+    assert "template.eoa.env" in env_text
+    assert "template.predict-account.env" in env_text
+    assert "template.mandated-vault.env" in env_text
+
+
+def test_legacy_dotenv_examples_match_publish_safe_templates() -> None:
+    predict_root = get_predict_root()
+    template_pairs = {
+        ".env.example": "template.env",
+        ".env.readonly.example": "template.readonly.env",
+        ".env.eoa.example": "template.eoa.env",
+        ".env.predict-account.example": "template.predict-account.env",
+        ".env.mandated-vault.example": "template.mandated-vault.env",
+    }
+
+    for legacy_name, publish_safe_name in template_pairs.items():
+        legacy_text = (predict_root / legacy_name).read_text()
+        publish_safe_text = (predict_root / publish_safe_name).read_text()
+        assert legacy_text == publish_safe_text

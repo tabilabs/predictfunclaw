@@ -24,6 +24,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from dotenv import dotenv_values
+
 SKILL_DIR = Path(__file__).resolve().parent.parent
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -50,12 +52,10 @@ def load_local_env(env_path: Path) -> None:
     if not env_path.exists():
         return
 
-    for raw_line in env_path.read_text().splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
+    for key, value in dotenv_values(env_path).items():
+        if value is None:
             continue
-        key, value = line.split("=", 1)
-        os.environ.setdefault(key.strip(), value.strip())
+        os.environ.setdefault(key, value)
 
 
 if os.getenv("PREDICTCLAW_DISABLE_LOCAL_ENV") != "1":
@@ -136,12 +136,20 @@ def print_help() -> None:
     print()
     print("Notes:")
     print("  - Default local posture is testnet or fixture mode.")
-    print("  - Mainnet requires PREDICT_API_KEY for authenticated predict.fun flows.")
+    print(
+        "  - Mainnet market reads and trading require PREDICT_API_KEY for authenticated predict.fun flows."
+    )
+    print(
+        "  - Testnet market reads use https://api-testnet.predict.fun and do not require PREDICT_API_KEY."
+    )
     print(
         "  - Predict Account mode is supported through wallet subcommands and signed flows."
     )
     print(
         "  - read-only blocks signer-backed wallet/trading flows; eoa and predict-account preserve the existing live signer paths."
+    )
+    print(
+        "  - wallet status requires signer configuration; start read-only verification with markets trending instead."
     )
     print(
         "  - Pure mandated-vault remains advanced explicit opt-in, but `predict-account + ERC_MANDATED_*` is the preferred advanced funding route."

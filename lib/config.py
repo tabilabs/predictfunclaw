@@ -34,7 +34,8 @@ MANDATED_ALLOWED_ADAPTERS_ROOT_DEFAULT = "0x" + "11" * 32
 MANDATED_VAULT_V1_UNSUPPORTED_CODE = "unsupported-in-mandated-vault-v1"
 MANDATED_MODE_REQUIRED_ERROR = (
     "Mandated vault configuration requires an explicit PREDICT_WALLET_MODE "
-    "(predict-account or mandated-vault)."
+    "(predict-account or mandated-vault). If you do not want vault overlay "
+    "behavior, clear all ERC_MANDATED_* values."
 )
 HEX32_RE = re.compile(r"^0x[a-fA-F0-9]{64}$")
 MANDATED_INPUT_ENV_NAMES = (
@@ -47,8 +48,6 @@ MANDATED_INPUT_ENV_NAMES = (
     "ERC_MANDATED_VAULT_SALT",
     "ERC_MANDATED_AUTHORITY_PRIVATE_KEY",
     "ERC_MANDATED_EXECUTOR_PRIVATE_KEY",
-    "ERC_MANDATED_MCP_COMMAND",
-    "ERC_MANDATED_CONTRACT_VERSION",
     "ERC_MANDATED_CHAIN_ID",
     "ERC_MANDATED_ALLOWED_ADAPTERS_ROOT",
     "ERC_MANDATED_FUNDING_MAX_AMOUNT_PER_TX",
@@ -65,6 +64,12 @@ def redact_text(text: str, secrets: list[str | None]) -> str:
     redacted = re.sub(r"Bearer\s+[A-Za-z0-9._-]+", "Bearer <redacted>", redacted)
     redacted = re.sub(r"0x[a-fA-F0-9]{64}", "0x<redacted>", redacted)
     return redacted
+
+
+def _default_api_base_url(runtime_env: RuntimeEnv) -> str:
+    if runtime_env == RuntimeEnv.MAINNET:
+        return "https://api.predict.fun"
+    return "https://api-testnet.predict.fun"
 
 
 class PredictConfig(BaseModel):
@@ -104,7 +109,11 @@ class PredictConfig(BaseModel):
     @model_validator(mode="after")
     def validate_runtime_contract(self) -> "PredictConfig":
         if self.env == RuntimeEnv.MAINNET and not self.api_key:
-            raise ValueError("PREDICT_API_KEY is required for mainnet.")
+            raise ValueError(
+                "PREDICT_API_KEY is required for mainnet. "
+                "Use test-fixture for secret-free verification or "
+                "api-testnet.predict.fun for unauthenticated testnet market reads."
+            )
 
         has_eoa = self.private_key is not None
         has_predict_account_address = bool(self.predict_account_address)
@@ -257,9 +266,10 @@ class PredictConfig(BaseModel):
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "PredictConfig":
         source = env or os.environ
+        runtime_env = RuntimeEnv(source.get("PREDICT_ENV", RuntimeEnv.TESTNET.value))
         try:
             return cls(
-                env=RuntimeEnv(source.get("PREDICT_ENV", RuntimeEnv.TESTNET.value)),
+                env=runtime_env,
                 storage_dir=Path(
                     source.get("PREDICT_STORAGE_DIR", "~/.openclaw/predict")
                 ).expanduser(),
@@ -329,9 +339,8 @@ class PredictConfig(BaseModel):
                 ),
                 openrouter_api_key=_secret_or_none(source.get("OPENROUTER_API_KEY")),
                 model_name=_value_or_none(source.get("PREDICT_MODEL")),
-                api_base_url=source.get(
-                    "PREDICT_API_BASE_URL", "https://api.predict.fun"
-                ),
+                api_base_url=_value_or_none(source.get("PREDICT_API_BASE_URL"))
+                or _default_api_base_url(runtime_env),
             )
         except (ValidationError, ValueError) as error:
             raise ConfigError(

@@ -284,6 +284,14 @@ pure `mandated-vault` 不提供 predict.fun trading parity。`wallet approve`、
 
 如果你的环境通过类似 `@erc-mandated/mcp` 的包来提供这套 runtime，那么你真正需要给 PredictClaw 配置的是该 runtime 对应的启动命令，也就是 `ERC_MANDATED_MCP_COMMAND`。PredictClaw 对外公开的契约是“命令入口”，而不是某个固定的包管理器依赖。
 
+如果你想走一键路径，可以运行：
+
+```bash
+uv run python scripts/predictclaw.py setup mandated-mcp --install --write-env
+```
+
+这个 helper 会先探测已有 launcher；如果没有，再尝试执行 `npm install -g @erc-mandated/mcp`，成功后自动回填 `ERC_MANDATED_MCP_COMMAND` 到本地 `.env`。它不会自动安装前置（例如 Node 或 npm）；如果前置缺失，PredictClaw 会直接给出明确提示。
+
 MCP orchestrates transport and preparation; the vault contract policy authorizes what the vault can actually execute.
 
 ## 命令面

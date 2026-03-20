@@ -83,6 +83,9 @@ def print_help() -> None:
     print("  markets trending            Show trending predict.fun markets")
     print("  markets search <query>      Search predict.fun markets")
     print("  market <id>                 Show a single market detail view")
+    print(
+        "  setup mandated-mcp          Detect or install the mandated-vault MCP runtime"
+    )
     print("  wallet status               Show wallet mode, balances, and readiness")
     print("  wallet approve              Set predict.fun approvals")
     print("  wallet deposit              Show funding address and asset guidance")
@@ -197,6 +200,9 @@ def main() -> int:
 
     if command == "wallet":
         return run_script("wallet", args)
+
+    if command == "setup":
+        return run_script("setup", args)
 
     if command == "buy":
         return run_script("trade", ["buy", *args])

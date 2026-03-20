@@ -93,6 +93,7 @@ def test_top_level_help_exposes_planned_command_surface() -> None:
         "positions",
         "position",
         "hedge",
+        "setup",
     ]:
         assert command in combined
     assert "PREDICT_PRIVATE_KEY" in combined
@@ -123,6 +124,17 @@ def test_top_level_help_exposes_planned_command_surface() -> None:
     assert "unsupported-in-mandated-vault-v1" in combined
     assert "vault-to-predict-account" in combined
     assert "funding-required" in combined
+
+
+def test_setup_help_exposes_mandated_mcp_installer() -> None:
+    result = run_predictclaw("setup", "--help")
+
+    assert result.returncode == 0
+    combined = result.stdout + result.stderr
+    assert "mandated-mcp" in combined
+    assert "--install" in combined
+    assert "--write-env" in combined
+    assert "erc-mandated-mcp" in combined
 
 
 def test_unknown_command_fails_cleanly() -> None:

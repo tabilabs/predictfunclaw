@@ -67,7 +67,7 @@ def test_documented_commands_exist_in_cli_help() -> None:
 
 def test_documented_env_vars_match_env_example() -> None:
     predict_root = get_predict_root()
-    env_keys = parse_env_file_keys(predict_root / ".env.example")
+    env_keys = parse_env_file_keys(predict_root / "template.env")
     readme = (predict_root / "README.md").read_text()
     skill = (predict_root / "SKILL.md").read_text()
 
@@ -81,10 +81,9 @@ def test_docs_cover_wallet_modes_and_mandated_vault_boundaries() -> None:
     predict_root = get_predict_root()
     readme = (predict_root / "README.md").read_text()
     skill = (predict_root / "SKILL.md").read_text()
-    root_readme = (predict_root.parent / "README.md").read_text()
-    onboarding = (predict_root.parent / "docs" / "onboarding.md").read_text()
+    readme_zh = (predict_root / "README.zh-CN.md").read_text()
 
-    for text in [readme, skill, root_readme, onboarding]:
+    for text in [readme, skill, readme_zh]:
         assert "mandated-vault" in text
         assert "vault-to-predict-account" in text
 
@@ -108,7 +107,64 @@ def test_docs_cover_wallet_modes_and_mandated_vault_boundaries() -> None:
         assert "funding-required" in text
         assert "Predict Account remains" in text
 
-    for text in [root_readme, onboarding]:
-        assert "PREDICT_WALLET_MODE=mandated-vault" in text
-        assert "PREDICT_WALLET_MODE=predict-account" in text
-        assert "unsupported-in-mandated-vault-v1" in text
+
+def test_docs_explain_flat_metadata_vs_mode_specific_runtime_requirements() -> None:
+    predict_root = get_predict_root()
+    readme = (predict_root / "README.md").read_text()
+    skill = (predict_root / "SKILL.md").read_text()
+    readme_zh = (predict_root / "README.zh-CN.md").read_text()
+
+    for text in [readme, skill]:
+        assert "metadata intentionally lists only the universal entry variables" in text
+        assert "OpenClaw's runtime metadata is flat rather than mode-aware" in text
+        assert (
+            "mode-specific requirements are documented below and enforced by the runtime config validator"
+            in text
+        )
+
+    assert "metadata 里故意只声明通用入口变量" in readme_zh
+    assert "OpenClaw 当前的 runtime metadata 是扁平的，不是按 mode 感知的" in readme_zh
+    assert "各模式自己的必填项以下面的示例和运行时配置校验为准" in readme_zh
+
+
+def test_docs_explain_first_install_bootstrap_layers() -> None:
+    predict_root = get_predict_root()
+    readme = (predict_root / "README.md").read_text()
+    skill = (predict_root / "SKILL.md").read_text()
+    readme_zh = (predict_root / "README.zh-CN.md").read_text()
+
+    for text in [readme, skill]:
+        assert "template.env" in text
+        assert "template.readonly.env" in text
+        assert "template.eoa.env" in text
+        assert "template.predict-account.env" in text
+        assert "template.mandated-vault.env" in text
+        assert "api-testnet.predict.fun" in text
+        assert "wallet status requires signer configuration" in text
+        assert "mainnet market reads require PREDICT_API_KEY" in text
+        assert "test-fixture" in text
+        assert ".env.example" not in text
+
+    assert "template.env" in readme_zh
+    assert "template.readonly.env" in readme_zh
+    assert "template.eoa.env" in readme_zh
+    assert "template.predict-account.env" in readme_zh
+    assert "template.mandated-vault.env" in readme_zh
+    assert "api-testnet.predict.fun" in readme_zh
+    assert "wallet status 需要 signer 配置" in readme_zh
+    assert "mainnet 的市场读取需要 PREDICT_API_KEY" in readme_zh
+    assert ".env.example" not in readme_zh
+
+
+def test_docs_explain_predictclaw_version_source_of_truth() -> None:
+    predict_root = get_predict_root()
+    readme = (predict_root / "README.md").read_text()
+    skill = (predict_root / "SKILL.md").read_text()
+    readme_zh = (predict_root / "README.zh-CN.md").read_text()
+
+    for text in [readme, skill]:
+        assert "pyproject.toml" in text
+        assert "repository root" in text.lower() or "repo root" in text.lower()
+
+    assert "pyproject.toml" in readme_zh
+    assert "仓库根目录" in readme_zh

@@ -187,6 +187,8 @@ ERC_MANDATED_CHAIN_ID=56
 
 This is now the normal pure `mandated-vault` onboarding path. PredictClaw uses the fixed product factory `0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6`, derives the signer address from `PREDICT_PRIVATE_KEY`, previews the deployment first, requires explicit confirmation before broadcast, then backfills `.env` with the deployed vault address and resolved values.
 
+On `--confirm`, PredictClaw automatically enables the MCP broadcast gate for that subprocess and bridges the bootstrap signer key. The standard flow does not require manually setting `ERC_MANDATED_ENABLE_BROADCAST=1` or `ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY`.
+
 Preview first:
 
 ```bash
@@ -240,6 +242,8 @@ ERC_MANDATED_CHAIN_ID=56
 ```
 
 `ERC_MANDATED_EXECUTOR_PRIVATE_KEY` is optional. When it is unset, PredictClaw reuses `ERC_MANDATED_AUTHORITY_PRIVATE_KEY` as the executor signer for the current Preflight MVP contract. This is the advanced/manual recovery path; if the predicted vault is still undeployed, PredictClaw can still surface preparation details and `manual-only` guidance without broadcasting.
+
+For advanced overrides, `ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY` can replace the default bootstrap signer resolution and `ERC_MANDATED_ENABLE_BROADCAST` can explicitly force the execute-mode gate on or off. In the standard `--confirm` path, PredictClaw auto-bridges both values to the MCP subprocess for you.
 
 ### predict-account + vault overlay (recommended advanced funding route)
 
@@ -397,6 +401,8 @@ uv run python scripts/predictclaw.py hedge analyze 101 202 --json
 | `ERC_MANDATED_VAULT_SALT` | Deterministic salt used for vault prediction/create preparation |
 | `ERC_MANDATED_AUTHORITY_PRIVATE_KEY` | Preflight Vault signer key for the current single-key MVP contract |
 | `ERC_MANDATED_EXECUTOR_PRIVATE_KEY` | Optional dedicated executor signer; falls back to `ERC_MANDATED_AUTHORITY_PRIVATE_KEY` when unset |
+| `ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY` | Optional execute-mode bootstrap signer override; when unset, PredictClaw falls back to `PREDICT_PRIVATE_KEY`, then `ERC_MANDATED_AUTHORITY_PRIVATE_KEY` |
+| `ERC_MANDATED_ENABLE_BROADCAST` | Optional execute-mode MCP gate override; `wallet bootstrap-vault --confirm` auto-bridges this to `1` unless you explicitly override it |
 | `ERC_MANDATED_MCP_COMMAND` | MCP launcher command (defaults to `erc-mandated-mcp`) |
 | `ERC_MANDATED_CONTRACT_VERSION` | Passed through to the mandated-vault MCP client |
 | `ERC_MANDATED_CHAIN_ID` | Optional explicit chain selection for the MCP bridge |

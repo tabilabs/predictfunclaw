@@ -187,6 +187,8 @@ ERC_MANDATED_CHAIN_ID=56
 
 这就是现在的默认 pure `mandated-vault` onboarding。PredictClaw 会使用固定产品 factory `0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6`，从 `PREDICT_PRIVATE_KEY` 推导 signer 地址，先给出预览，再要求显式确认，最后在成功后把 deployed vault 地址和解析后的值回填到 `.env`。
 
+执行 `--confirm` 时，PredictClaw 会自动为该 MCP 子进程打开 broadcast 开关，并桥接 bootstrap signer key。标准流程下，你不需要再手动设置 `ERC_MANDATED_ENABLE_BROADCAST=1` 或 `ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY`。
+
 先做预览：
 
 ```bash
@@ -240,6 +242,8 @@ ERC_MANDATED_CHAIN_ID=56
 ```
 
 `ERC_MANDATED_EXECUTOR_PRIVATE_KEY` 是可选项。未设置时，PredictClaw 会在当前 Preflight MVP 合约路径中复用 `ERC_MANDATED_AUTHORITY_PRIVATE_KEY` 作为 executor signer。这是高级 / 手动恢复路径；如果预测到的 vault 还未部署，PredictClaw 仍然可以给出 preparation 信息和 `manual-only` 指引，但不会自动广播。
+
+对于高级 override，`ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY` 可以替换默认 bootstrap signer 解析规则，`ERC_MANDATED_ENABLE_BROADCAST` 可以显式强制 execute-mode gate 开或关。但标准 `--confirm` 路径里，PredictClaw 会自动把这两项桥接给 MCP 子进程。
 
 ### predict-account + vault overlay（推荐的高级资金路线）
 
@@ -399,6 +403,8 @@ uv run python scripts/predictclaw.py hedge analyze 101 202 --json
 | `ERC_MANDATED_VAULT_SALT` | 用于 vault 预测 / create 准备的确定性 salt |
 | `ERC_MANDATED_AUTHORITY_PRIVATE_KEY` | 当前单密钥 MVP 合约路径的 Preflight Vault signer key |
 | `ERC_MANDATED_EXECUTOR_PRIVATE_KEY` | 可选的 executor signer；未设置时回退到 `ERC_MANDATED_AUTHORITY_PRIVATE_KEY` |
+| `ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY` | 可选的 execute-mode bootstrap signer override；未设置时，PredictClaw 会依次回退到 `PREDICT_PRIVATE_KEY`、`ERC_MANDATED_AUTHORITY_PRIVATE_KEY` |
+| `ERC_MANDATED_ENABLE_BROADCAST` | 可选的 execute-mode MCP gate override；`wallet bootstrap-vault --confirm` 默认会自动桥接成 `1`，除非你显式覆盖 |
 | `ERC_MANDATED_MCP_COMMAND` | MCP 启动命令（默认 `erc-mandated-mcp`） |
 | `ERC_MANDATED_CONTRACT_VERSION` | 透传给 mandated-vault MCP client 的版本号 |
 | `ERC_MANDATED_CHAIN_ID` | MCP bridge 的可选显式链选择 |

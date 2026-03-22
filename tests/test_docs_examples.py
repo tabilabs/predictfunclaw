@@ -10,6 +10,7 @@ DOC_COMMANDS = [
     "wallet status",
     "wallet approve",
     "wallet deposit",
+    "wallet bootstrap-vault",
     "wallet withdraw usdt",
     "wallet withdraw bnb",
     "buy 123 YES 25",
@@ -190,3 +191,26 @@ def test_docs_explain_mandated_mcp_one_click_install_boundary() -> None:
     assert "setup mandated-mcp --install --write-env" in readme_zh
     assert "自动回填" in readme_zh
     assert "不会自动安装前置" in readme_zh
+
+
+def test_docs_shift_mandated_vault_default_to_preview_confirm_bootstrap_flow() -> None:
+    predict_root = get_predict_root()
+    readme = (predict_root / "README.md").read_text()
+    skill = (predict_root / "SKILL.md").read_text()
+    readme_zh = (predict_root / "README.zh-CN.md").read_text()
+    template = (predict_root / "template.mandated-vault.env").read_text()
+
+    assert "ERC_MANDATED_VAULT_ADDRESS=0xYOUR_DEPLOYED_VAULT" not in template
+
+    for text in [readme, skill]:
+        assert "bootstrap-vault" in text
+        assert "0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6" in text
+        assert "preview" in text.lower()
+        assert "confirm" in text.lower()
+        assert ".env" in text
+        assert "backfill" in text.lower()
+
+    assert "0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6" in readme_zh
+    assert "预览" in readme_zh
+    assert "确认" in readme_zh
+    assert ".env" in readme_zh

@@ -82,7 +82,7 @@ SKILL frontmatter 的 metadata 里故意只声明通用入口变量：`PREDICT_E
    - fixture 启动 -> `uv run python scripts/predictclaw.py markets trending`
    - live read-only -> `uv run python scripts/predictclaw.py markets trending`
    - `eoa` / `predict-account` -> `uv run python scripts/predictclaw.py wallet status --json`
-   - `mandated-vault` -> `uv run python scripts/predictclaw.py wallet deposit --json`
+   - `mandated-vault` -> `uv run python scripts/predictclaw.py wallet bootstrap-vault --json`
 
 ## 启动模板
 
@@ -174,7 +174,39 @@ PREDICT_ACCOUNT_ADDRESS=0xYOUR_PREDICT_ACCOUNT
 PREDICT_PRIVY_PRIVATE_KEY=0xYOUR_PRIVY_EXPORTED_KEY
 ```
 
-### mandated-vault 模式（已知 deployed vault）
+### mandated-vault 模式（默认 bootstrap 流程）
+
+```dotenv
+PREDICT_ENV=testnet
+PREDICT_WALLET_MODE=mandated-vault
+PREDICT_PRIVATE_KEY=0xYOUR_EOA_PRIVATE_KEY
+ERC_MANDATED_MCP_COMMAND=erc-mandated-mcp
+ERC_MANDATED_CHAIN_ID=97
+```
+
+这就是现在的默认 pure `mandated-vault` onboarding。PredictClaw 会使用固定产品 factory `0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6`，从 `PREDICT_PRIVATE_KEY` 推导 signer 地址，先给出预览，再要求显式确认，最后在成功后把 deployed vault 地址和解析后的值回填到 `.env`。
+
+先做预览：
+
+```bash
+uv run python scripts/predictclaw.py wallet bootstrap-vault --json
+```
+
+确认并广播：
+
+```bash
+uv run python scripts/predictclaw.py wallet bootstrap-vault --confirm --json
+```
+
+可选的部署 / 资金额度控制：
+
+```dotenv
+ERC_MANDATED_FUNDING_MAX_AMOUNT_PER_TX=5000000000000000000
+ERC_MANDATED_FUNDING_MAX_AMOUNT_PER_WINDOW=10000000000000000000
+ERC_MANDATED_FUNDING_WINDOW_SECONDS=3600
+```
+
+### mandated-vault 模式（高级 / 手动：已知 deployed vault）
 
 ```dotenv
 PREDICT_ENV=testnet
@@ -184,9 +216,9 @@ ERC_MANDATED_MCP_COMMAND=erc-mandated-mcp
 ERC_MANDATED_CHAIN_ID=97
 ```
 
-如果你当前的 MCP 路径需要 single-key preflight signer，再额外设置 `ERC_MANDATED_AUTHORITY_PRIVATE_KEY`。
+当 vault 已经部署好，而且你希望 PredictClaw 直接绑定它时，再使用这条高级 / 手动路径。
 
-### mandated-vault 模式（predicted / 未部署 vault）
+### mandated-vault 模式（高级 / 手动：完整 derivation tuple）
 
 ```dotenv
 PREDICT_ENV=testnet
@@ -202,9 +234,7 @@ ERC_MANDATED_CONTRACT_VERSION=v0.3.0-agent-contract
 ERC_MANDATED_CHAIN_ID=97
 ```
 
-`ERC_MANDATED_EXECUTOR_PRIVATE_KEY` 是可选项。未设置时，PredictClaw 会在当前 Preflight MVP 合约路径中复用 `ERC_MANDATED_AUTHORITY_PRIVATE_KEY` 作为 executor signer。
-
-在这条路径中，PredictClaw 会通过 MCP 预测 vault 地址；如果 vault 尚未部署，则返回 create-vault preparation 信息，而不会自动广播。该准备信息会以 `manual-only` 语义暴露。
+`ERC_MANDATED_EXECUTOR_PRIVATE_KEY` 是可选项。未设置时，PredictClaw 会在当前 Preflight MVP 合约路径中复用 `ERC_MANDATED_AUTHORITY_PRIVATE_KEY` 作为 executor signer。这是高级 / 手动恢复路径；如果预测到的 vault 还未部署，PredictClaw 仍然可以给出 preparation 信息和 `manual-only` 指引，但不会自动广播。
 
 ### predict-account + vault overlay（推荐的高级资金路线）
 
@@ -259,6 +289,8 @@ PredictClaw 支持四种显式 wallet mode：
 
 `mandated-vault` 是一个高级显式 opt-in 模式，只适合你明确需要 MCP 辅助的 vault control-plane 时使用。
 
+对于默认 pure bootstrap 流程，用户只需要提供 EOA signer、部署手续费资金，以及可选的额度控制。PredictClaw 会处理固定 factory、预览、确认和 `.env` 回填。
+
 pure `mandated-vault` 不提供 predict.fun trading parity。`wallet approve`、`wallet withdraw`、`buy`、`positions`、`position`、`hedge scan`、`hedge analyze` 都会 fail closed，并返回 `unsupported-in-mandated-vault-v1`。
 
 ### 常见配置错误
@@ -279,8 +311,9 @@ pure `mandated-vault` 不提供 predict.fun trading parity。`wallet approve`、
 它在实际工作流中的作用有三层：
 
 1. **Vault 预测与准备** — 当只有 derivation tuple 时，用 MCP 预测 vault 地址并生成准备信息。
-2. **Vault overlay 编排** — 在 overlay 模式下暴露 `vault-to-predict-account` 路由、funding-policy 上下文与会话规划。
-3. **控制面安全边界** — 当 MCP 不存在或不可用时，PredictClaw 会显式 fail closed，而不是静默猜测。
+2. **Vault bootstrap 执行** — 通过 `vault_bootstrap` 支持 pure mandated-vault 的预览与确认部署。
+3. **Vault overlay 编排** — 在 overlay 模式下暴露 `vault-to-predict-account` 路由、funding-policy 上下文与会话规划。
+4. **控制面安全边界** — 当 MCP 不存在或不可用时，PredictClaw 会显式 fail closed，而不是静默猜测。
 
 如果你的环境通过类似 `@erc-mandated/mcp` 的包来提供这套 runtime，那么你真正需要给 PredictClaw 配置的是该 runtime 对应的启动命令，也就是 `ERC_MANDATED_MCP_COMMAND`。PredictClaw 对外公开的契约是“命令入口”，而不是某个固定的包管理器依赖。
 
@@ -303,6 +336,8 @@ uv run python scripts/predictclaw.py market 123 --json
 uv run python scripts/predictclaw.py wallet status --json
 uv run python scripts/predictclaw.py wallet approve --json
 uv run python scripts/predictclaw.py wallet deposit --json
+uv run python scripts/predictclaw.py wallet bootstrap-vault --json
+uv run python scripts/predictclaw.py wallet bootstrap-vault --confirm --json
 uv run python scripts/predictclaw.py wallet withdraw usdt 1 0xb30741673D351135Cf96564dfD15f8e135f9C310 --json
 uv run python scripts/predictclaw.py wallet withdraw bnb 0.1 0xb30741673D351135Cf96564dfD15f8e135f9C310 --json
 uv run python scripts/predictclaw.py buy 123 YES 25 --json
@@ -316,6 +351,8 @@ uv run python scripts/predictclaw.py hedge analyze 101 202 --json
 
 - `wallet status` 会报告 signer mode、funding address、余额和 approval readiness。
 - `wallet deposit` 会展示当前有效的 funding address 与可接受资产（`BNB`、`USDT`）。
+- `wallet bootstrap-vault` 是 pure mandated-vault 的预览 / 确认入口。
+- 默认 bootstrap 流程会使用固定 factory `0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6`，并在确认成功后回填 `.env`。
 - `wallet withdraw` 在尝试执行转账逻辑前会先验证目标地址 checksum、金额为正、余额充足以及 BNB gas 余量。
 - 在 fixture 模式下，withdraw 会返回确定性的占位 tx hash，而不会触链。
 - 在 `predict-account + ERC_MANDATED_*` overlay 中，`wallet status` / `wallet deposit` 会暴露：

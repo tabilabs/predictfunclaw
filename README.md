@@ -82,7 +82,7 @@ The SKILL frontmatter metadata intentionally lists only the universal entry vari
    - fixture bootstrap -> `uv run python scripts/predictclaw.py markets trending`
    - live read-only -> `uv run python scripts/predictclaw.py markets trending`
    - `eoa` / `predict-account` -> `uv run python scripts/predictclaw.py wallet status --json`
-   - `mandated-vault` -> `uv run python scripts/predictclaw.py wallet deposit --json`
+   - `mandated-vault` -> `uv run python scripts/predictclaw.py wallet bootstrap-vault --json`
 
 ## Bootstrap templates
 
@@ -174,7 +174,39 @@ PREDICT_ACCOUNT_ADDRESS=0xYOUR_PREDICT_ACCOUNT
 PREDICT_PRIVY_PRIVATE_KEY=0xYOUR_PRIVY_EXPORTED_KEY
 ```
 
-### mandated-vault mode (explicit deployed vault)
+### mandated-vault mode (default bootstrap flow)
+
+```dotenv
+PREDICT_ENV=testnet
+PREDICT_WALLET_MODE=mandated-vault
+PREDICT_PRIVATE_KEY=0xYOUR_EOA_PRIVATE_KEY
+ERC_MANDATED_MCP_COMMAND=erc-mandated-mcp
+ERC_MANDATED_CHAIN_ID=97
+```
+
+This is now the normal pure `mandated-vault` onboarding path. PredictClaw uses the fixed product factory `0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6`, derives the signer address from `PREDICT_PRIVATE_KEY`, previews the deployment first, requires explicit confirmation before broadcast, then backfills `.env` with the deployed vault address and resolved values.
+
+Preview first:
+
+```bash
+uv run python scripts/predictclaw.py wallet bootstrap-vault --json
+```
+
+Confirm and broadcast:
+
+```bash
+uv run python scripts/predictclaw.py wallet bootstrap-vault --confirm --json
+```
+
+Optional bootstrap amount / funding controls:
+
+```dotenv
+ERC_MANDATED_FUNDING_MAX_AMOUNT_PER_TX=5000000000000000000
+ERC_MANDATED_FUNDING_MAX_AMOUNT_PER_WINDOW=10000000000000000000
+ERC_MANDATED_FUNDING_WINDOW_SECONDS=3600
+```
+
+### mandated-vault manual path (explicit deployed vault)
 
 ```dotenv
 PREDICT_ENV=testnet
@@ -184,9 +216,9 @@ ERC_MANDATED_MCP_COMMAND=erc-mandated-mcp
 ERC_MANDATED_CHAIN_ID=97
 ```
 
-Add `ERC_MANDATED_AUTHORITY_PRIVATE_KEY` when your current MCP path needs the single-key preflight signer.
+Use this advanced/manual path when the vault is already deployed and you want PredictClaw to target it directly.
 
-### mandated-vault mode (predicted / undeployed vault)
+### mandated-vault manual path (full derivation tuple)
 
 ```dotenv
 PREDICT_ENV=testnet
@@ -202,9 +234,7 @@ ERC_MANDATED_CONTRACT_VERSION=v0.3.0-agent-contract
 ERC_MANDATED_CHAIN_ID=97
 ```
 
-`ERC_MANDATED_EXECUTOR_PRIVATE_KEY` is optional. When it is unset, PredictClaw reuses `ERC_MANDATED_AUTHORITY_PRIVATE_KEY` as the executor signer for the current Preflight MVP contract.
-
-In that path, PredictClaw asks the MCP to predict the vault address and, when the vault is still undeployed, returns create-vault preparation guidance only. It does **not** auto-broadcast and instead reports `manual-only` preparation details.
+`ERC_MANDATED_EXECUTOR_PRIVATE_KEY` is optional. When it is unset, PredictClaw reuses `ERC_MANDATED_AUTHORITY_PRIVATE_KEY` as the executor signer for the current Preflight MVP contract. This is the advanced/manual recovery path; if the predicted vault is still undeployed, PredictClaw can still surface preparation details and `manual-only` guidance without broadcasting.
 
 ### predict-account + vault overlay (recommended advanced funding route)
 
@@ -257,6 +287,8 @@ This route exposes `vault-to-predict-account` semantics in `wallet status --json
 
 `mandated-vault` is an advanced explicit opt-in mode. Only enable it when you intentionally want MCP-assisted vault control-plane behavior.
 
+For the default pure bootstrap flow, users only need an EOA signer, deployment-fee funding, and any optional amount caps. PredictClaw handles the product-configured factory, previews before broadcast, requires explicit confirmation, and backfills `.env` after success.
+
 Pure `mandated-vault` does **not** provide predict.fun trading parity. `wallet approve`, `wallet withdraw`, `buy`, `positions`, `position`, `hedge scan`, and `hedge analyze` fail closed with `unsupported-in-mandated-vault-v1`.
 
 ### Common configuration mistakes
@@ -277,8 +309,9 @@ Pure `mandated-vault` does **not** provide predict.fun trading parity. `wallet a
 This is the practical bridge between PredictClaw and the Vault control plane:
 
 1. **Vault prediction / preparation** — predict a vault address when only the derivation tuple is available.
-2. **Vault overlay orchestration** — expose `vault-to-predict-account` routing, funding-policy context, and session planning.
-3. **Control-plane safety boundary** — if the MCP is missing or unhealthy, PredictClaw surfaces a fail-closed error instead of silently guessing.
+2. **Vault bootstrap execution** — preview and confirm pure mandated-vault deployment through `vault_bootstrap`.
+3. **Vault overlay orchestration** — expose `vault-to-predict-account` routing, funding-policy context, and session planning.
+4. **Control-plane safety boundary** — if the MCP is missing or unhealthy, PredictClaw surfaces a fail-closed error instead of silently guessing.
 
 If your environment packages that runtime through something like an `@erc-mandated/mcp` package, point `ERC_MANDATED_MCP_COMMAND` at the launcher it installs. PredictClaw's public contract is the command path, not a hard-coded package manager dependency.
 
@@ -301,6 +334,8 @@ uv run python scripts/predictclaw.py market 123 --json
 uv run python scripts/predictclaw.py wallet status --json
 uv run python scripts/predictclaw.py wallet approve --json
 uv run python scripts/predictclaw.py wallet deposit --json
+uv run python scripts/predictclaw.py wallet bootstrap-vault --json
+uv run python scripts/predictclaw.py wallet bootstrap-vault --confirm --json
 uv run python scripts/predictclaw.py wallet withdraw usdt 1 0xb30741673D351135Cf96564dfD15f8e135f9C310 --json
 uv run python scripts/predictclaw.py wallet withdraw bnb 0.1 0xb30741673D351135Cf96564dfD15f8e135f9C310 --json
 uv run python scripts/predictclaw.py buy 123 YES 25 --json
@@ -314,6 +349,8 @@ uv run python scripts/predictclaw.py hedge analyze 101 202 --json
 
 - `wallet status` reports signer mode, funding address, balances, and approval readiness.
 - `wallet deposit` shows the active funding address and accepted assets (`BNB`, `USDT`).
+- `wallet bootstrap-vault` is the pure mandated-vault preview / confirmation entry point.
+- The default bootstrap flow uses the fixed factory `0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6` and backfills `.env` after a confirmed deployment.
 - `wallet withdraw` validates checksum destination, positive amount, available balance, and BNB gas headroom before attempting transfer logic.
 - In fixture mode, withdraw commands return deterministic placeholder transaction hashes instead of touching a chain.
 - In `predict-account + ERC_MANDATED_*` overlay, `wallet status` / `wallet deposit` expose:
@@ -347,7 +384,7 @@ uv run python scripts/predictclaw.py hedge analyze 101 202 --json
 | `PREDICT_ACCOUNT_ADDRESS` | Predict Account smart-wallet address |
 | `PREDICT_PRIVY_PRIVATE_KEY` | Privy-exported signer for Predict Account mode |
 | `ERC_MANDATED_VAULT_ADDRESS` | Explicit deployed mandated vault address |
-| `ERC_MANDATED_FACTORY_ADDRESS` | Factory address used to predict a vault when no explicit vault address is supplied |
+| `ERC_MANDATED_FACTORY_ADDRESS` | Product default factory for pure bootstrap and manual derivation override; current default is `0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6` |
 | `ERC_MANDATED_VAULT_ASSET_ADDRESS` | ERC-4626 asset used in mandated-vault prediction/create preparation |
 | `ERC_MANDATED_VAULT_NAME` | Vault name used in mandated-vault prediction/create preparation |
 | `ERC_MANDATED_VAULT_SYMBOL` | Vault symbol used in mandated-vault prediction/create preparation |
@@ -406,5 +443,6 @@ uv run pytest tests/smoke/test_testnet_smoke.py -q
 - Withdrawal commands are public; transfer validation happens before chain interaction, but users still own the operational risk.
 - `predict-account + ERC_MANDATED_*` is the recommended advanced trading route when you want Vault to fund the Predict Account while keeping the official Predict Account order model.
 - Explicit-vs-predicted vault semantics: `ERC_MANDATED_VAULT_ADDRESS` targets an existing vault directly; otherwise PredictClaw uses the derivation tuple to ask the MCP for the predicted vault address.
-- If a predicted vault is undeployed, `wallet deposit` can return create-vault preparation details (`predictedVault`, transaction summary, `manual-only`) without broadcasting.
+- If a predicted vault is undeployed, `wallet bootstrap-vault --json` returns preview details (`predictedVault`, transaction summary, confirmation required) without broadcasting.
+- Advanced/manual derivation flows can still return create-vault preparation details with `manual-only` guidance when you intentionally stay on the manual path.
 - Pure `mandated-vault` does not provide predict.fun trading parity and intentionally fails closed for unsupported paths with `unsupported-in-mandated-vault-v1`.

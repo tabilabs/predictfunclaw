@@ -157,6 +157,18 @@ def test_wallet_deposit_help_documents_funding_semantics() -> None:
     assert "usdt" in combined.lower()
 
 
+def test_wallet_bootstrap_help_documents_preview_and_confirmation_flags() -> None:
+    result = run_predictclaw("wallet", "bootstrap-vault", "--help")
+
+    assert result.returncode == 0
+    combined = result.stdout + result.stderr
+    assert "--confirm" in combined
+    assert "--json" in combined
+    assert "preview" in combined.lower()
+    assert "confirmation" in combined.lower()
+    assert "0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6" in combined
+
+
 def test_wallet_status_and_deposit_fail_cleanly_when_mcp_is_unavailable() -> None:
     env = {
         "PREDICT_ENV": "testnet",

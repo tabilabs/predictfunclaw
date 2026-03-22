@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -15,10 +16,16 @@ if str(SKILL_DIR) not in sys.path:
 import lib
 
 from lib.config import ConfigError, PredictConfig
+from lib.env_backfill import backfill_env_file
+from lib.local_env import load_local_env, resolve_local_env_path
 from lib.mandated_mcp_bridge import MandatedVaultMcpError
 from lib.wallet_manager import WalletManager
 
 FundingService = getattr(lib, "FundingService")
+
+
+if os.getenv("PREDICTCLAW_DISABLE_LOCAL_ENV") != "1":
+    load_local_env(SKILL_DIR)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -53,6 +60,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     deposit.add_argument("--json", action="store_true")
     deposit.set_defaults(handler=_handle_deposit)
+
+    bootstrap = subparsers.add_parser(
+        "bootstrap-vault",
+        help="Preview or confirm pure mandated-vault bootstrap deployment.",
+        description=(
+            "Preview the pure mandated-vault bootstrap using the product-configured factory 0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6. "
+            "Without --confirm this command only shows the predicted vault, chain, signer, and "
+            "transaction summary. Explicit confirmation is required before broadcast. With --confirm it executes MCP vault_bootstrap, then backfills "
+            "the local .env with the deployed vault address and resolved values."
+        ),
+    )
+    bootstrap.add_argument(
+        "--confirm",
+        action="store_true",
+        help="Broadcast the vault deployment and backfill the local .env.",
+    )
+    bootstrap.add_argument("--json", action="store_true")
+    bootstrap.set_defaults(handler=_handle_bootstrap_vault)
 
     withdraw = subparsers.add_parser(
         "withdraw",
@@ -232,6 +257,48 @@ def _handle_deposit(args: argparse.Namespace) -> int:
     print(f"Accepted Assets: {accepted_assets}")
     print(f"BNB Balance (wei): {payload['bnbBalanceWei']}")
     print(f"USDT Balance (wei): {payload['usdtBalanceWei']}")
+    return 0
+
+
+def _handle_bootstrap_vault(args: argparse.Namespace) -> int:
+    try:
+        snapshot = _load_manager().bootstrap_vault(confirm=args.confirm)
+    except (ConfigError, MandatedVaultMcpError) as error:
+        print(str(error))
+        return 1
+
+    payload = snapshot.to_dict()
+    if args.confirm:
+        env_path = resolve_local_env_path(SKILL_DIR)
+        backfill_env_file(env_path, snapshot.backfill_env or {})
+        payload["envPath"] = str(env_path)
+        payload["envUpdated"] = True
+
+    if args.json:
+        print(json.dumps(payload, indent=2))
+        return 0
+
+    print(f"Mode: {payload['mode']}")
+    print(f"Chain: {payload['chain']} ({payload['chainId']})")
+    print(f"Factory: {payload['factory']}")
+    print(f"Signer Address: {payload['signerAddress']}")
+    print(f"Predicted Vault: {payload['predictedVault']}")
+    print(f"Deployment Status: {payload['deploymentStatus']}")
+    print(
+        f"Confirmation Required: {'yes' if payload['confirmationRequired'] else 'no'}"
+    )
+    tx_summary = payload.get("txSummary")
+    if isinstance(tx_summary, dict):
+        print(f"Tx To: {tx_summary.get('to')}")
+        print(f"Tx Value: {tx_summary.get('value')}")
+        print(f"Tx Gas: {tx_summary.get('gas')}")
+    if args.confirm:
+        print(f"Deployed Vault: {payload['deployedVault']}")
+        print(f"Updated Env: {payload['envPath']}")
+    else:
+        print(
+            "Run `predictclaw wallet bootstrap-vault --confirm --json` to broadcast and backfill .env."
+        )
     return 0
 
 

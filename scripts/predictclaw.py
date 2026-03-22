@@ -8,6 +8,7 @@ Usage:
     predictclaw wallet status
     predictclaw wallet approve
     predictclaw wallet deposit
+    predictclaw wallet bootstrap-vault [--confirm]
     predictclaw wallet withdraw usdt <amount> <to>
     predictclaw wallet withdraw bnb <amount> <to>
     predictclaw buy <market_id> YES 25
@@ -24,7 +25,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from dotenv import dotenv_values
+from lib.local_env import load_local_env
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -38,6 +39,7 @@ Usage:
     predictclaw wallet status
     predictclaw wallet approve
     predictclaw wallet deposit
+    predictclaw wallet bootstrap-vault [--confirm]
     predictclaw wallet withdraw usdt <amount> <to>
     predictclaw wallet withdraw bnb <amount> <to>
     predictclaw buy <market_id> YES 25
@@ -48,18 +50,8 @@ Usage:
 """
 
 
-def load_local_env(env_path: Path) -> None:
-    if not env_path.exists():
-        return
-
-    for key, value in dotenv_values(env_path).items():
-        if value is None:
-            continue
-        os.environ.setdefault(key, value)
-
-
 if os.getenv("PREDICTCLAW_DISABLE_LOCAL_ENV") != "1":
-    load_local_env(SKILL_DIR / ".env")
+    load_local_env(SKILL_DIR)
 
 
 def run_script(script_name: str, args: list[str]) -> int:
@@ -89,6 +81,7 @@ def print_help() -> None:
     print("  wallet status               Show wallet mode, balances, and readiness")
     print("  wallet approve              Set predict.fun approvals")
     print("  wallet deposit              Show funding address and asset guidance")
+    print("  wallet bootstrap-vault      Preview or confirm mandated vault deployment")
     print("  wallet withdraw ...         Withdraw USDT or BNB to an external address")
     print("  buy <market_id> YES|NO <amount>")
     print(
@@ -158,7 +151,13 @@ def print_help() -> None:
         "  - Pure mandated-vault remains advanced explicit opt-in, but `predict-account + ERC_MANDATED_*` is the preferred advanced funding route."
     )
     print(
+        "  - Pure mandated-vault bootstrap now defaults to preview-first onboarding; `wallet bootstrap-vault --confirm` is the only broadcast step."
+    )
+    print(
         "  - ERC_MANDATED_VAULT_ADDRESS selects an explicit deployed vault; otherwise the full derivation tuple lets the MCP predict the vault address."
+    )
+    print(
+        "  - Product default factory is 0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6, and confirmed bootstrap backfills the local .env with the deployed vault address and resolved values."
     )
     print(
         "  - Overlay wallet status/deposit expose `vault-to-predict-account` routing: Predict Account stays the trading identity while Vault funds it, and undeployed vault setup remains manual-only."

@@ -88,8 +88,8 @@ The SKILL frontmatter metadata intentionally lists only the universal entry vari
 
 - `template.env` -> safest first install; uses `test-fixture` + `read-only` so the CLI can start without secrets or network access
 - `template.readonly.env` -> live market reads; mainnet market reads require PREDICT_API_KEY
-- `template.eoa.env` -> EOA signer flow, starting on testnet with `https://api-testnet.predict.fun`
-- `template.predict-account.env` -> Predict Account signer flow, starting on testnet with `https://api-testnet.predict.fun`
+- `template.eoa.env` -> EOA signer flow, pinned to mainnet with `https://api.predict.fun`
+- `template.predict-account.env` -> Predict Account signer flow, pinned to mainnet with `https://api.predict.fun`
 - `template.mandated-vault.env` -> advanced explicit opt-in template for vault control-plane usage
 
 ## Real first-install paths
@@ -114,10 +114,7 @@ Fixture mode only knows the bundled fixture market IDs (`123`, `456`, `789`, `10
 
 ### C. Live read-only market reads
 
-Copy `template.readonly.env` and choose one of these paths:
-
-- `mainnet` + valid `PREDICT_API_KEY` for live production reads
-- `testnet` + `https://api-testnet.predict.fun` for unauthenticated non-mainnet reads
+Copy `template.readonly.env` to read live production markets on mainnet.
 
 ```bash
 uv run python scripts/predictclaw.py markets trending
@@ -153,23 +150,25 @@ PREDICT_WALLET_MODE=read-only
 PREDICT_API_KEY=YOUR_PREDICT_API_KEY
 ```
 
-Mainnet market reads require PREDICT_API_KEY. If you want unauthenticated non-mainnet reads instead, use `PREDICT_ENV=testnet` plus `PREDICT_API_BASE_URL=https://api-testnet.predict.fun`.
+Mainnet market reads require `PREDICT_API_KEY`.
 
 ### eoa mode
 
 ```dotenv
-PREDICT_ENV=testnet
+PREDICT_ENV=mainnet
 PREDICT_WALLET_MODE=eoa
-PREDICT_API_BASE_URL=https://api-testnet.predict.fun
+PREDICT_API_BASE_URL=https://api.predict.fun
+PREDICT_API_KEY=YOUR_PREDICT_API_KEY
 PREDICT_PRIVATE_KEY=0xYOUR_EOA_PRIVATE_KEY
 ```
 
 ### predict-account mode
 
 ```dotenv
-PREDICT_ENV=testnet
+PREDICT_ENV=mainnet
 PREDICT_WALLET_MODE=predict-account
-PREDICT_API_BASE_URL=https://api-testnet.predict.fun
+PREDICT_API_BASE_URL=https://api.predict.fun
+PREDICT_API_KEY=YOUR_PREDICT_API_KEY
 PREDICT_ACCOUNT_ADDRESS=0xYOUR_PREDICT_ACCOUNT
 PREDICT_PRIVY_PRIVATE_KEY=0xYOUR_PRIVY_EXPORTED_KEY
 ```
@@ -177,11 +176,13 @@ PREDICT_PRIVY_PRIVATE_KEY=0xYOUR_PRIVY_EXPORTED_KEY
 ### mandated-vault mode (default bootstrap flow)
 
 ```dotenv
-PREDICT_ENV=testnet
+PREDICT_ENV=mainnet
+PREDICT_API_BASE_URL=https://api.predict.fun
+PREDICT_API_KEY=YOUR_PREDICT_API_KEY
 PREDICT_WALLET_MODE=mandated-vault
 PREDICT_PRIVATE_KEY=0xYOUR_EOA_PRIVATE_KEY
 ERC_MANDATED_MCP_COMMAND=erc-mandated-mcp
-ERC_MANDATED_CHAIN_ID=97
+ERC_MANDATED_CHAIN_ID=56
 ```
 
 This is now the normal pure `mandated-vault` onboarding path. PredictClaw uses the fixed product factory `0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6`, derives the signer address from `PREDICT_PRIVATE_KEY`, previews the deployment first, requires explicit confirmation before broadcast, then backfills `.env` with the deployed vault address and resolved values.
@@ -209,11 +210,13 @@ ERC_MANDATED_FUNDING_WINDOW_SECONDS=3600
 ### mandated-vault manual path (explicit deployed vault)
 
 ```dotenv
-PREDICT_ENV=testnet
+PREDICT_ENV=mainnet
+PREDICT_API_BASE_URL=https://api.predict.fun
+PREDICT_API_KEY=YOUR_PREDICT_API_KEY
 PREDICT_WALLET_MODE=mandated-vault
 ERC_MANDATED_VAULT_ADDRESS=0xYOUR_DEPLOYED_VAULT
 ERC_MANDATED_MCP_COMMAND=erc-mandated-mcp
-ERC_MANDATED_CHAIN_ID=97
+ERC_MANDATED_CHAIN_ID=56
 ```
 
 Use this advanced/manual path when the vault is already deployed and you want PredictClaw to target it directly.
@@ -221,7 +224,9 @@ Use this advanced/manual path when the vault is already deployed and you want Pr
 ### mandated-vault manual path (full derivation tuple)
 
 ```dotenv
-PREDICT_ENV=testnet
+PREDICT_ENV=mainnet
+PREDICT_API_BASE_URL=https://api.predict.fun
+PREDICT_API_KEY=YOUR_PREDICT_API_KEY
 PREDICT_WALLET_MODE=mandated-vault
 ERC_MANDATED_FACTORY_ADDRESS=0xYOUR_FACTORY
 ERC_MANDATED_VAULT_ASSET_ADDRESS=0xYOUR_ASSET
@@ -231,7 +236,7 @@ ERC_MANDATED_VAULT_AUTHORITY=0xYOUR_AUTHORITY
 ERC_MANDATED_VAULT_SALT=0xYOUR_SALT
 ERC_MANDATED_MCP_COMMAND=erc-mandated-mcp
 ERC_MANDATED_CONTRACT_VERSION=v0.3.0-agent-contract
-ERC_MANDATED_CHAIN_ID=97
+ERC_MANDATED_CHAIN_ID=56
 ```
 
 `ERC_MANDATED_EXECUTOR_PRIVATE_KEY` is optional. When it is unset, PredictClaw reuses `ERC_MANDATED_AUTHORITY_PRIVATE_KEY` as the executor signer for the current Preflight MVP contract. This is the advanced/manual recovery path; if the predicted vault is still undeployed, PredictClaw can still surface preparation details and `manual-only` guidance without broadcasting.
@@ -239,9 +244,10 @@ ERC_MANDATED_CHAIN_ID=97
 ### predict-account + vault overlay (recommended advanced funding route)
 
 ```dotenv
-PREDICT_ENV=testnet
+PREDICT_ENV=mainnet
+PREDICT_API_BASE_URL=https://api.predict.fun
+PREDICT_API_KEY=YOUR_PREDICT_API_KEY
 PREDICT_WALLET_MODE=predict-account
-PREDICT_API_BASE_URL=https://api-testnet.predict.fun
 PREDICT_ACCOUNT_ADDRESS=0xYOUR_PREDICT_ACCOUNT
 PREDICT_PRIVY_PRIVATE_KEY=0xYOUR_PRIVY_EXPORTED_KEY
 ERC_MANDATED_VAULT_ADDRESS=0xYOUR_DEPLOYED_VAULT
@@ -250,7 +256,7 @@ ERC_MANDATED_VAULT_AUTHORITY=0xYOUR_AUTHORITY
 ERC_MANDATED_AUTHORITY_PRIVATE_KEY=0xYOUR_VAULT_AUTHORITY_KEY
 ERC_MANDATED_MCP_COMMAND=erc-mandated-mcp
 ERC_MANDATED_CONTRACT_VERSION=v0.3.0-agent-contract
-ERC_MANDATED_CHAIN_ID=97
+ERC_MANDATED_CHAIN_ID=56
 ```
 
 If you do **not** have an explicit deployed vault address yet, keep the same Predict Account pair and replace `ERC_MANDATED_VAULT_ADDRESS` with the full derivation tuple: `ERC_MANDATED_FACTORY_ADDRESS`, `ERC_MANDATED_VAULT_ASSET_ADDRESS`, `ERC_MANDATED_VAULT_NAME`, `ERC_MANDATED_VAULT_SYMBOL`, `ERC_MANDATED_VAULT_AUTHORITY`, and `ERC_MANDATED_VAULT_SALT`.
@@ -296,7 +302,6 @@ Pure `mandated-vault` does **not** provide predict.fun trading parity. `wallet a
 - `read-only` is browse-only. Start with `markets ...`, not signer-backed wallet or trade commands.
 - `wallet status` requires signer configuration. In `read-only`, start with `markets trending` or `market <id> --json` instead.
 - `mainnet` market reads require `PREDICT_API_KEY`; missing keys fail early and invalid keys return `401 unauthorized`.
-- `testnet` market reads use `https://api-testnet.predict.fun`; the older `https://dev.predict.fun` endpoint no longer matches the current API contract.
 - `eoa` requires `PREDICT_PRIVATE_KEY` and rejects Predict Account or mandated-vault inputs.
 - `predict-account` requires both `PREDICT_ACCOUNT_ADDRESS` and `PREDICT_PRIVY_PRIVATE_KEY`.
 - `mainnet` requires `PREDICT_API_KEY`.
@@ -368,17 +373,17 @@ uv run python scripts/predictclaw.py hedge analyze 101 202 --json
 ## Runtime Modes
 
 - `test-fixture` — uses local JSON fixtures and deterministic wallet/hedge/trade behavior; ideal for development, integration tests, and secret-free first-install verification.
-- `testnet` — intended for live but non-mainnet checks; the current REST endpoint is `https://api-testnet.predict.fun` and market reads do not require `PREDICT_API_KEY`.
 - `mainnet` — requires `PREDICT_API_KEY` even for market reads and should be treated as a live-trading environment.
+- `testnet` — still supported only when you explicitly opt into a non-mainnet environment; it is no longer a packaged default or recommended onboarding path.
 
 ## Environment Variables
 
 | Variable | Purpose |
 | --- | --- |
 | `PREDICT_STORAGE_DIR` | Local journal and position storage |
-| `PREDICT_ENV` | Defaults to `testnet` in code; `template.env` intentionally bootstraps `test-fixture`; accepted values are `testnet`, `mainnet`, or `test-fixture` |
+| `PREDICT_ENV` | Defaults to `mainnet` in code; `template.env` intentionally bootstraps `test-fixture`; accepted values are `mainnet`, `testnet`, or `test-fixture` |
 | `PREDICT_WALLET_MODE` | Explicit mode override: `read-only`, `eoa`, `predict-account`, or `mandated-vault` |
-| `PREDICT_API_BASE_URL` | Optional REST base override; leave empty to use the env-specific default (`api-testnet.predict.fun` for `testnet`, ignored in `test-fixture`, `api.predict.fun` for `mainnet`) |
+| `PREDICT_API_BASE_URL` | Optional REST base override; packaged live templates pin this to `https://api.predict.fun`, while leaving it empty uses the env-specific default |
 | `PREDICT_API_KEY` | Mainnet-authenticated predict.fun API access; required for mainnet market reads and trading |
 | `PREDICT_PRIVATE_KEY` | EOA trading and funding path |
 | `PREDICT_ACCOUNT_ADDRESS` | Predict Account smart-wallet address |
@@ -438,7 +443,7 @@ uv run pytest tests/smoke/test_testnet_smoke.py -q
 ## Safety Notes
 
 - Do not treat fixture mode as proof of funded-wallet behavior.
-- Do not assume live liquidity from testnet or mainnet docs alone.
+- Do not assume live liquidity from docs alone.
 - Keep only limited funds on automation keys.
 - Withdrawal commands are public; transfer validation happens before chain interaction, but users still own the operational risk.
 - `predict-account + ERC_MANDATED_*` is the recommended advanced trading route when you want Vault to fund the Predict Account while keeping the official Predict Account order model.

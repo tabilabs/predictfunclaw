@@ -143,7 +143,8 @@ def test_docs_explain_first_install_bootstrap_layers() -> None:
         assert "template.eoa.env" in text
         assert "template.predict-account.env" in text
         assert "template.mandated-vault.env" in text
-        assert "api-testnet.predict.fun" in text
+        assert "api.predict.fun" in text
+        assert "api-testnet.predict.fun" not in text
         assert "wallet status requires signer configuration" in text
         assert "mainnet market reads require PREDICT_API_KEY" in text
         assert "test-fixture" in text
@@ -154,7 +155,8 @@ def test_docs_explain_first_install_bootstrap_layers() -> None:
     assert "template.eoa.env" in readme_zh
     assert "template.predict-account.env" in readme_zh
     assert "template.mandated-vault.env" in readme_zh
-    assert "api-testnet.predict.fun" in readme_zh
+    assert "api.predict.fun" in readme_zh
+    assert "api-testnet.predict.fun" not in readme_zh
     assert "wallet status 需要 signer 配置" in readme_zh
     assert "mainnet 的市场读取需要 PREDICT_API_KEY" in readme_zh
     assert ".env.example" not in readme_zh

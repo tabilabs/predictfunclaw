@@ -47,7 +47,21 @@ def test_mainnet_requires_api_key() -> None:
 
     assert "59c6995e" not in str(error.value)
     assert "test-fixture" in str(error.value)
-    assert "api-testnet.predict.fun" in str(error.value)
+    assert "api-testnet.predict.fun" not in str(error.value)
+
+
+def test_unset_env_defaults_to_mainnet_api_base_url_and_chain() -> None:
+    config = PredictConfig.from_env(
+        {
+            "PREDICT_STORAGE_DIR": "/tmp/predict",
+            "PREDICT_API_KEY": "test-api-key",
+            "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+        }
+    )
+
+    assert config.env.value == "mainnet"
+    assert config.chain_id == ChainId.BNB_MAINNET
+    assert config.api_base_url == "https://api.predict.fun"
 
 
 def test_testnet_eoa_configuration_uses_bnb_testnet() -> None:

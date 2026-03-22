@@ -92,7 +92,7 @@ def _default_api_base_url(runtime_env: RuntimeEnv) -> str:
 class PredictConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    env: RuntimeEnv = RuntimeEnv.TESTNET
+    env: RuntimeEnv = RuntimeEnv.MAINNET
     storage_dir: Path = Path("~/.openclaw/predict").expanduser()
     wallet_mode_override: WalletMode | None = None
     api_key: SecretStr | None = None
@@ -131,8 +131,8 @@ class PredictConfig(BaseModel):
         if self.env == RuntimeEnv.MAINNET and not self.api_key:
             raise ValueError(
                 "PREDICT_API_KEY is required for mainnet. "
-                "Use test-fixture for secret-free verification or "
-                "api-testnet.predict.fun for unauthenticated testnet market reads."
+                "Use test-fixture for secret-free verification, or set a non-mainnet "
+                "environment explicitly if you intentionally need it."
             )
 
         has_eoa = self.private_key is not None
@@ -290,7 +290,7 @@ class PredictConfig(BaseModel):
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "PredictConfig":
         source = env or os.environ
-        runtime_env = RuntimeEnv(source.get("PREDICT_ENV", RuntimeEnv.TESTNET.value))
+        runtime_env = RuntimeEnv(source.get("PREDICT_ENV", RuntimeEnv.MAINNET.value))
         wallet_mode_override = _wallet_mode_or_none(source.get("PREDICT_WALLET_MODE"))
         private_key = _secret_or_none(source.get("PREDICT_PRIVATE_KEY"))
         mandated_chain_id = _int_or_none(source.get("ERC_MANDATED_CHAIN_ID"))

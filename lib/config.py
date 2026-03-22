@@ -31,6 +31,16 @@ class ConfigError(ValueError):
 MANDATED_MCP_COMMAND_DEFAULT = "erc-mandated-mcp"
 MANDATED_CONTRACT_VERSION_DEFAULT = "v0.3.0-agent-contract"
 MANDATED_ALLOWED_ADAPTERS_ROOT_DEFAULT = "0x" + "11" * 32
+MANDATED_FACTORY_ADDRESS_DEFAULT = "0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6"
+MANDATED_VAULT_NAME_DEFAULT = "PredictClaw Vault"
+MANDATED_VAULT_SYMBOL_DEFAULT = "pCLAW"
+MANDATED_VAULT_SALT_DEFAULT = (
+    "0x515efd8b3fb262cd01675c249fcdf91ce513efff6fed6c1e97d2a6d7f526c7f9"
+)
+MANDATED_VAULT_ASSET_ADDRESS_BY_CHAIN_ID = {
+    56: "0x55d398326f99059fF775485246999027B3197955",
+    97: "0xB32171ecD878607FFc4F8FC0bCcE6852BB3149E0",
+}
 MANDATED_VAULT_V1_UNSUPPORTED_CODE = "unsupported-in-mandated-vault-v1"
 MANDATED_MODE_REQUIRED_ERROR = (
     "Mandated vault configuration requires an explicit PREDICT_WALLET_MODE "
@@ -53,6 +63,13 @@ MANDATED_INPUT_ENV_NAMES = (
     "ERC_MANDATED_FUNDING_MAX_AMOUNT_PER_TX",
     "ERC_MANDATED_FUNDING_MAX_AMOUNT_PER_WINDOW",
     "ERC_MANDATED_FUNDING_WINDOW_SECONDS",
+)
+MANDATED_DERIVATION_CORE_ENV_NAMES = (
+    "ERC_MANDATED_VAULT_ASSET_ADDRESS",
+    "ERC_MANDATED_VAULT_NAME",
+    "ERC_MANDATED_VAULT_SYMBOL",
+    "ERC_MANDATED_VAULT_AUTHORITY",
+    "ERC_MANDATED_VAULT_SALT",
 )
 
 
@@ -99,6 +116,9 @@ class PredictConfig(BaseModel):
     mandated_funding_max_amount_per_window: str | None = None
     mandated_funding_window_seconds: int | None = None
     has_mandated_config_input: bool = False
+    has_mandated_explicit_vault_input: bool = False
+    has_any_mandated_derivation_input: bool = False
+    has_all_mandated_derivation_input: bool = False
     openrouter_api_key: SecretStr | None = None
     model_name: str | None = None
     api_base_url: str = "https://api.predict.fun"
@@ -120,17 +140,10 @@ class PredictConfig(BaseModel):
         has_privy_key = self.privy_private_key is not None
         has_predict_account_credentials = has_predict_account_address or has_privy_key
         has_predict_account_pair = has_predict_account_address and has_privy_key
-        mandated_derivation_fields = (
-            self.mandated_factory_address,
-            self.mandated_vault_asset_address,
-            self.mandated_vault_name,
-            self.mandated_vault_symbol,
-            self.mandated_vault_authority,
-            self.mandated_vault_salt,
-        )
-        has_mandated_vault_address = bool(self.mandated_vault_address)
-        has_any_mandated_derivation = any(mandated_derivation_fields)
-        has_all_mandated_derivation = all(mandated_derivation_fields)
+        has_bootstrap_signer = has_eoa
+        has_mandated_vault_address = self.has_mandated_explicit_vault_input
+        has_any_mandated_derivation = self.has_any_mandated_derivation_input
+        has_all_mandated_derivation = self.has_all_mandated_derivation_input
 
         def validate_mandated_overlay_inputs() -> None:
             if not self.has_mandated_config_input:
@@ -199,11 +212,22 @@ class PredictConfig(BaseModel):
             validate_mandated_overlay_inputs()
             return self
 
-        if has_eoa or has_predict_account_credentials:
+        if has_predict_account_credentials:
             raise ValueError(
-                "mandated-vault mode does not allow EOA or Predict Account credentials."
+                "mandated-vault mode does not allow Predict Account credentials."
             )
-        validate_mandated_overlay_inputs()
+        if has_any_mandated_derivation and not has_all_mandated_derivation:
+            raise ValueError(
+                "mandated-vault mode requires PREDICT_PRIVATE_KEY, ERC_MANDATED_VAULT_ADDRESS, or full derivation inputs."
+            )
+        if (
+            not has_bootstrap_signer
+            and not has_mandated_vault_address
+            and not has_all_mandated_derivation
+        ):
+            raise ValueError(
+                "mandated-vault mode requires PREDICT_PRIVATE_KEY, ERC_MANDATED_VAULT_ADDRESS, or full derivation inputs."
+            )
 
         return self
 
@@ -237,11 +261,11 @@ class PredictConfig(BaseModel):
 
     @property
     def mandated_authority_private_key_value(self) -> str | None:
-        return (
-            self.mandated_authority_private_key.get_secret_value()
-            if self.mandated_authority_private_key
-            else None
-        )
+        if self.mandated_authority_private_key is not None:
+            return self.mandated_authority_private_key.get_secret_value()
+        if self.wallet_mode == WalletMode.MANDATED_VAULT:
+            return self.private_key_value
+        return None
 
     @property
     def mandated_executor_private_key_value(self) -> str | None:
@@ -267,44 +291,75 @@ class PredictConfig(BaseModel):
     def from_env(cls, env: Mapping[str, str] | None = None) -> "PredictConfig":
         source = env or os.environ
         runtime_env = RuntimeEnv(source.get("PREDICT_ENV", RuntimeEnv.TESTNET.value))
+        wallet_mode_override = _wallet_mode_or_none(source.get("PREDICT_WALLET_MODE"))
+        private_key = _secret_or_none(source.get("PREDICT_PRIVATE_KEY"))
+        mandated_chain_id = _int_or_none(source.get("ERC_MANDATED_CHAIN_ID"))
+        mandated_vault_address = _value_or_none(
+            source.get("ERC_MANDATED_VAULT_ADDRESS")
+        )
+        mandated_factory_address = (
+            _value_or_none(source.get("ERC_MANDATED_FACTORY_ADDRESS"))
+            or MANDATED_FACTORY_ADDRESS_DEFAULT
+        )
+        raw_mandated_vault_asset_address = _value_or_none(
+            source.get("ERC_MANDATED_VAULT_ASSET_ADDRESS")
+        )
+        raw_mandated_vault_name = _value_or_none(source.get("ERC_MANDATED_VAULT_NAME"))
+        raw_mandated_vault_symbol = _value_or_none(
+            source.get("ERC_MANDATED_VAULT_SYMBOL")
+        )
+        raw_mandated_vault_authority = _value_or_none(
+            source.get("ERC_MANDATED_VAULT_AUTHORITY")
+        )
+        raw_mandated_vault_salt = _value_or_none(source.get("ERC_MANDATED_VAULT_SALT"))
+
+        mandated_vault_asset_address = raw_mandated_vault_asset_address
+        mandated_vault_name = raw_mandated_vault_name
+        mandated_vault_symbol = raw_mandated_vault_symbol
+        mandated_vault_authority = raw_mandated_vault_authority
+        mandated_vault_salt = raw_mandated_vault_salt
+
+        if (
+            wallet_mode_override == WalletMode.MANDATED_VAULT
+            and mandated_vault_address is None
+        ):
+            if mandated_vault_asset_address is None:
+                mandated_vault_asset_address = _default_mandated_vault_asset_address(
+                    runtime_env, mandated_chain_id
+                )
+            if mandated_vault_name is None:
+                mandated_vault_name = MANDATED_VAULT_NAME_DEFAULT
+            if mandated_vault_symbol is None:
+                mandated_vault_symbol = MANDATED_VAULT_SYMBOL_DEFAULT
+            if mandated_vault_salt is None:
+                mandated_vault_salt = MANDATED_VAULT_SALT_DEFAULT
+            if mandated_vault_authority is None and private_key is not None:
+                mandated_vault_authority = Account.from_key(
+                    private_key.get_secret_value()
+                ).address
+
         try:
             return cls(
                 env=runtime_env,
                 storage_dir=Path(
                     source.get("PREDICT_STORAGE_DIR", "~/.openclaw/predict")
                 ).expanduser(),
-                wallet_mode_override=_wallet_mode_or_none(
-                    source.get("PREDICT_WALLET_MODE")
-                ),
+                wallet_mode_override=wallet_mode_override,
                 api_key=_secret_or_none(source.get("PREDICT_API_KEY")),
-                private_key=_secret_or_none(source.get("PREDICT_PRIVATE_KEY")),
+                private_key=private_key,
                 predict_account_address=_value_or_none(
                     source.get("PREDICT_ACCOUNT_ADDRESS")
                 ),
                 privy_private_key=_secret_or_none(
                     source.get("PREDICT_PRIVY_PRIVATE_KEY")
                 ),
-                mandated_vault_address=_value_or_none(
-                    source.get("ERC_MANDATED_VAULT_ADDRESS")
-                ),
-                mandated_factory_address=_value_or_none(
-                    source.get("ERC_MANDATED_FACTORY_ADDRESS")
-                ),
-                mandated_vault_asset_address=_value_or_none(
-                    source.get("ERC_MANDATED_VAULT_ASSET_ADDRESS")
-                ),
-                mandated_vault_name=_value_or_none(
-                    source.get("ERC_MANDATED_VAULT_NAME")
-                ),
-                mandated_vault_symbol=_value_or_none(
-                    source.get("ERC_MANDATED_VAULT_SYMBOL")
-                ),
-                mandated_vault_authority=_value_or_none(
-                    source.get("ERC_MANDATED_VAULT_AUTHORITY")
-                ),
-                mandated_vault_salt=_value_or_none(
-                    source.get("ERC_MANDATED_VAULT_SALT")
-                ),
+                mandated_vault_address=mandated_vault_address,
+                mandated_factory_address=mandated_factory_address,
+                mandated_vault_asset_address=mandated_vault_asset_address,
+                mandated_vault_name=mandated_vault_name,
+                mandated_vault_symbol=mandated_vault_symbol,
+                mandated_vault_authority=mandated_vault_authority,
+                mandated_vault_salt=mandated_vault_salt,
                 mandated_authority_private_key=_secret_or_none(
                     source.get("ERC_MANDATED_AUTHORITY_PRIVATE_KEY")
                 ),
@@ -319,7 +374,7 @@ class PredictConfig(BaseModel):
                     source.get("ERC_MANDATED_CONTRACT_VERSION")
                 )
                 or MANDATED_CONTRACT_VERSION_DEFAULT,
-                mandated_chain_id=_int_or_none(source.get("ERC_MANDATED_CHAIN_ID")),
+                mandated_chain_id=mandated_chain_id,
                 mandated_allowed_adapters_root=_value_or_none(
                     source.get("ERC_MANDATED_ALLOWED_ADAPTERS_ROOT")
                 )
@@ -336,6 +391,15 @@ class PredictConfig(BaseModel):
                 has_mandated_config_input=any(
                     _value_or_none(source.get(env_name)) is not None
                     for env_name in MANDATED_INPUT_ENV_NAMES
+                ),
+                has_mandated_explicit_vault_input=mandated_vault_address is not None,
+                has_any_mandated_derivation_input=any(
+                    _value_or_none(source.get(env_name)) is not None
+                    for env_name in MANDATED_DERIVATION_CORE_ENV_NAMES
+                ),
+                has_all_mandated_derivation_input=all(
+                    _value_or_none(source.get(env_name)) is not None
+                    for env_name in MANDATED_DERIVATION_CORE_ENV_NAMES
                 ),
                 openrouter_api_key=_secret_or_none(source.get("OPENROUTER_API_KEY")),
                 model_name=_value_or_none(source.get("PREDICT_MODEL")),
@@ -378,6 +442,24 @@ def _wallet_mode_or_none(raw: str | None) -> WalletMode | None:
 def _int_or_none(raw: str | None) -> int | None:
     value = _value_or_none(raw)
     return int(value) if value else None
+
+
+def _default_mandated_vault_asset_address(
+    runtime_env: RuntimeEnv, mandated_chain_id: int | None
+) -> str:
+    selected_chain_id = mandated_chain_id
+    if selected_chain_id is None:
+        selected_chain_id = int(
+            ChainId.BNB_MAINNET
+            if runtime_env == RuntimeEnv.MAINNET
+            else ChainId.BNB_TESTNET
+        )
+    asset_address = MANDATED_VAULT_ASSET_ADDRESS_BY_CHAIN_ID.get(selected_chain_id)
+    if asset_address is None:
+        raise ValueError(
+            "No default ERC_MANDATED_VAULT_ASSET_ADDRESS is configured for the selected chain."
+        )
+    return asset_address
 
 
 def mandated_vault_v1_unsupported_error(flow: str) -> ConfigError:

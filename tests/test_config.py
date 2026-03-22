@@ -303,6 +303,27 @@ def test_explicit_mandated_vault_mode_uses_address_and_defaults() -> None:
     assert config.mandated_chain_id is None
 
 
+def test_mandated_vault_bootstrap_accepts_eoa_signer_with_product_defaults() -> None:
+    config = PredictConfig.from_env(
+        {
+            **base_env(),
+            "PREDICT_WALLET_MODE": "mandated-vault",
+            "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+        }
+    )
+
+    assert config.wallet_mode == WalletMode.MANDATED_VAULT
+    assert config.mandated_vault_address is None
+    assert (
+        config.mandated_factory_address == "0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6"
+    )
+    assert config.mandated_vault_asset_address is not None
+    assert config.mandated_vault_name is not None
+    assert config.mandated_vault_symbol is not None
+    assert config.mandated_vault_salt is not None
+    assert config.mandated_vault_authority == Account.from_key(EOA_PRIVATE_KEY).address
+
+
 def test_explicit_mandated_vault_mode_accepts_full_derivation_inputs() -> None:
     config = PredictConfig.from_env(
         {
@@ -323,7 +344,10 @@ def test_explicit_mandated_vault_mode_accepts_full_derivation_inputs() -> None:
 
 
 def test_explicit_mandated_vault_mode_requires_address_or_full_derivation() -> None:
-    with pytest.raises(ConfigError, match="requires ERC_MANDATED_VAULT_ADDRESS"):
+    with pytest.raises(
+        ConfigError,
+        match="requires PREDICT_PRIVATE_KEY, ERC_MANDATED_VAULT_ADDRESS, or full derivation inputs",
+    ):
         PredictConfig.from_env(
             {
                 **base_env(),
@@ -333,14 +357,17 @@ def test_explicit_mandated_vault_mode_requires_address_or_full_derivation() -> N
         )
 
 
-def test_explicit_mandated_vault_mode_rejects_other_wallet_credentials() -> None:
-    with pytest.raises(ConfigError, match="does not allow EOA or Predict Account"):
+def test_explicit_mandated_vault_mode_still_rejects_predict_account_credentials() -> (
+    None
+):
+    with pytest.raises(ConfigError, match="does not allow Predict Account"):
         PredictConfig.from_env(
             {
                 **base_env(),
                 "PREDICT_WALLET_MODE": "mandated-vault",
                 "ERC_MANDATED_VAULT_ADDRESS": MANDATED_VAULT_ADDRESS,
-                "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+                "PREDICT_ACCOUNT_ADDRESS": PREDICT_ACCOUNT_ADDRESS,
+                "PREDICT_PRIVY_PRIVATE_KEY": PREDICT_PRIVY_PRIVATE_KEY,
             }
         )
 

@@ -70,7 +70,7 @@ def test_install_runs_npm_and_backfills_detected_launcher(tmp_path: Path) -> Non
 
     result = configure_mandated_mcp(
         skill_dir=tmp_path,
-        process_env={"PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}"},
+        process_env={"PATH": f"{bin_dir}{os.pathsep}{os.defpath}"},
         install=True,
         write_env=True,
     )

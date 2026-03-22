@@ -3,9 +3,9 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Callable, Protocol
+from typing import Any, Callable, Mapping, Protocol
 
-from eth_abi import encode as abi_encode
+from eth_abi.abi import encode as abi_encode
 from eth_account import Account
 from predict_sdk import OrderBuilder, OrderBuilderOptions
 from predict_sdk._internal.contracts import (
@@ -164,14 +164,14 @@ class MandatedVaultBridgeProtocol(Protocol):
         symbol: str,
         salt: str,
         signer_address: str | None = None,
-        mode: str = "plan",
-        authority_mode: str | None = None,
+        mode: Any = "plan",
+        authority_mode: Any = None,
         authority: str | None = None,
         executor: str | None = None,
         create_account_context: bool | None = None,
         create_funding_policy: bool | None = None,
-        account_context_options: dict[str, Any] | None = None,
-        funding_policy_options: dict[str, Any] | None = None,
+        account_context_options: Mapping[str, Any] | None = None,
+        funding_policy_options: Mapping[str, Any] | None = None,
     ) -> VaultBootstrapResult: ...
 
     async def create_agent_account_context(
@@ -540,12 +540,57 @@ MANDATED_FUNDING_TRANSFER_MAX_CUMULATIVE_DRAWDOWN_BPS = "10000"
 
 
 @dataclass
+class MandatedVaultBootstrapSnapshot:
+    mode: str
+    chain_id: int
+    chain_name: str
+    factory: str
+    signer_address: str
+    predicted_vault: str
+    deployed_vault: str
+    vault_address_source: str
+    vault_deployed: bool
+    already_deployed: bool
+    deployment_status: str
+    confirmation_required: bool
+    tx_summary: dict[str, object] | None
+    env_block: str | None = None
+    config_block: str | None = None
+    backfill_env: dict[str, str] | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "mode": self.mode,
+            "chainId": self.chain_id,
+            "chain": self.chain_name,
+            "factory": self.factory,
+            "signerAddress": self.signer_address,
+            "predictedVault": self.predicted_vault,
+            "deployedVault": self.deployed_vault,
+            "vaultAddressSource": self.vault_address_source,
+            "vaultDeployed": self.vault_deployed,
+            "alreadyDeployed": self.already_deployed,
+            "deploymentStatus": self.deployment_status,
+            "confirmationRequired": self.confirmation_required,
+            "txSummary": self.tx_summary,
+        }
+        if self.env_block is not None:
+            payload["envBlock"] = self.env_block
+        if self.config_block is not None:
+            payload["configBlock"] = self.config_block
+        if self.backfill_env is not None:
+            payload["backfillEnv"] = self.backfill_env
+        return payload
+
+
+@dataclass
 class MandatedVaultResolution:
     vault_address: str
     vault_address_source: str
     vault_deployed: bool
     vault_health: VaultHealthCheckResult | None
     create_vault_prepare: FactoryCreateVaultPrepareResult | None
+    bootstrap_preview: MandatedVaultBootstrapSnapshot | None = None
 
 
 @dataclass
@@ -562,6 +607,7 @@ class MandatedWalletStatusSnapshot:
     vault_deployed: bool
     vault_health: VaultHealthCheckResult | None
     state_changing_flows_enabled: bool
+    bootstrap_preview: MandatedVaultBootstrapSnapshot | None = None
 
     def to_dict(self) -> dict[str, object]:
         health_payload: dict[str, object] | None = None
@@ -573,7 +619,7 @@ class MandatedWalletStatusSnapshot:
                 "totalAssets": self.vault_health.totalAssets,
             }
 
-        return {
+        payload = {
             "mode": self.mode,
             "selectedChain": {
                 "name": self.selected_chain_name,
@@ -592,6 +638,9 @@ class MandatedWalletStatusSnapshot:
             "vaultHealth": health_payload,
             "stateChangingFlowsEnabled": self.state_changing_flows_enabled,
         }
+        if self.bootstrap_preview is not None:
+            payload["bootstrapPreview"] = self.bootstrap_preview.to_dict()
+        return payload
 
 
 def has_mandated_vault_derivation(config: PredictConfig) -> bool:
@@ -620,6 +669,110 @@ def _bootstrap_create_vault_prepare(
     return FactoryCreateVaultPrepareResult(
         predictedVault=bootstrap.predictedVault,
         txRequest=create_tx.txRequest,
+    )
+
+
+def _selected_mandated_chain_id(config: PredictConfig) -> int:
+    return config.mandated_chain_id or int(config.chain_id)
+
+
+def _selected_mandated_chain_name(config: PredictConfig) -> str:
+    return "BNB Mainnet" if _selected_mandated_chain_id(config) == 56 else "BNB Testnet"
+
+
+def _bootstrap_tx_summary(
+    bootstrap: VaultBootstrapResult,
+) -> dict[str, object] | None:
+    create_tx = bootstrap.createTx
+    if create_tx is None:
+        return None
+    payload: dict[str, object] = {}
+    if create_tx.txRequest is not None:
+        payload.update(
+            {
+                "from": create_tx.txRequest.from_address,
+                "to": create_tx.txRequest.to,
+                "data": create_tx.txRequest.data,
+                "value": create_tx.txRequest.value,
+                "gas": create_tx.txRequest.gas,
+            }
+        )
+    if create_tx.txHash is not None:
+        payload["txHash"] = create_tx.txHash
+    if create_tx.receiptStatus is not None:
+        payload["receiptStatus"] = create_tx.receiptStatus
+    if create_tx.blockNumber is not None:
+        payload["blockNumber"] = create_tx.blockNumber
+    if create_tx.confirmations is not None:
+        payload["confirmations"] = create_tx.confirmations
+    return payload or None
+
+
+def _parse_env_block(env_block: str | None) -> dict[str, str]:
+    if not env_block:
+        return {}
+    payload: dict[str, str] = {}
+    for raw_line in env_block.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        payload[key.strip()] = value.strip()
+    return payload
+
+
+def _build_backfill_env(
+    config: PredictConfig,
+    bootstrap: VaultBootstrapResult,
+) -> dict[str, str]:
+    selected_chain_id = _selected_mandated_chain_id(config)
+    payload = _parse_env_block(bootstrap.envBlock)
+    payload.update(
+        {
+            "ERC_MANDATED_VAULT_ADDRESS": bootstrap.deployedVault,
+            "ERC_MANDATED_FACTORY_ADDRESS": bootstrap.factory,
+            "ERC_MANDATED_CHAIN_ID": str(selected_chain_id),
+            "ERC_MANDATED_MCP_COMMAND": config.mandated_mcp_command,
+            "ERC_MANDATED_CONTRACT_VERSION": config.mandated_contract_version,
+            "ERC_MANDATED_VAULT_ASSET_ADDRESS": str(
+                config.mandated_vault_asset_address
+            ),
+            "ERC_MANDATED_VAULT_NAME": str(config.mandated_vault_name),
+            "ERC_MANDATED_VAULT_SYMBOL": str(config.mandated_vault_symbol),
+            "ERC_MANDATED_VAULT_AUTHORITY": str(config.mandated_vault_authority),
+            "ERC_MANDATED_VAULT_SALT": str(config.mandated_vault_salt),
+        }
+    )
+    return payload
+
+
+def _build_bootstrap_snapshot(
+    config: PredictConfig,
+    bootstrap: VaultBootstrapResult,
+    *,
+    vault_address_source: str,
+    mode: str,
+    include_backfill_env: bool,
+) -> MandatedVaultBootstrapSnapshot:
+    return MandatedVaultBootstrapSnapshot(
+        mode=mode,
+        chain_id=_selected_mandated_chain_id(config),
+        chain_name=_selected_mandated_chain_name(config),
+        factory=bootstrap.factory,
+        signer_address=bootstrap.signerAddress,
+        predicted_vault=bootstrap.predictedVault,
+        deployed_vault=bootstrap.deployedVault,
+        vault_address_source=vault_address_source,
+        vault_deployed=bootstrap.alreadyDeployed,
+        already_deployed=bootstrap.alreadyDeployed,
+        deployment_status=bootstrap.deploymentStatus,
+        confirmation_required=(not bootstrap.alreadyDeployed and mode == "plan"),
+        tx_summary=_bootstrap_tx_summary(bootstrap),
+        env_block=bootstrap.envBlock,
+        config_block=bootstrap.configBlock,
+        backfill_env=_build_backfill_env(config, bootstrap)
+        if include_backfill_env
+        else None,
     )
 
 
@@ -659,6 +812,15 @@ async def resolve_mandated_vault(
             vault_health = bootstrap.vaultHealth
             if vault_deployed and vault_health is None:
                 vault_health = await bridge.health_check(vault_address)
+            bootstrap_preview = None
+            if not vault_deployed:
+                bootstrap_preview = _build_bootstrap_snapshot(
+                    config,
+                    bootstrap,
+                    vault_address_source=vault_address_source,
+                    mode="plan",
+                    include_backfill_env=False,
+                )
 
             return MandatedVaultResolution(
                 vault_address=vault_address,
@@ -670,6 +832,7 @@ async def resolve_mandated_vault(
                     if include_create_prepare and not vault_deployed
                     else None
                 ),
+                bootstrap_preview=bootstrap_preview,
             )
 
         predicted = await bridge.predict_vault_address(
@@ -716,6 +879,7 @@ async def resolve_mandated_vault(
         vault_deployed=vault_deployed,
         vault_health=vault_health,
         create_vault_prepare=create_vault_prepare,
+        bootstrap_preview=None,
     )
 
 
@@ -983,6 +1147,51 @@ class WalletManager:
             approvals=sdk.get_approval_snapshot(),
         )
 
+    def bootstrap_vault(self, *, confirm: bool) -> MandatedVaultBootstrapSnapshot:
+        if self._config.wallet_mode != WalletMode.MANDATED_VAULT:
+            raise ConfigError(
+                "wallet bootstrap-vault only supports mandated-vault mode."
+            )
+
+        bridge = self._bridge_factory(self._config)
+
+        async def _run_and_close() -> MandatedVaultBootstrapSnapshot:
+            await bridge.connect()
+            try:
+                if not _supports_vault_bootstrap(bridge):
+                    raise MandatedVaultMcpError(
+                        "Mandated-vault MCP cannot perform bootstrap execute; missing required tool: vault_bootstrap."
+                    )
+                assert self._config.mandated_vault_authority is not None
+                bootstrap = await bridge.vault_bootstrap(
+                    factory=self._config.mandated_factory_address,
+                    asset=str(self._config.mandated_vault_asset_address),
+                    name=str(self._config.mandated_vault_name),
+                    symbol=str(self._config.mandated_vault_symbol),
+                    salt=str(self._config.mandated_vault_salt),
+                    signer_address=str(self._config.mandated_vault_authority),
+                    mode="execute" if confirm else "plan",
+                    authority_mode="single_key",
+                    authority=str(self._config.mandated_vault_authority),
+                    create_account_context=False,
+                    create_funding_policy=False,
+                )
+                return _build_bootstrap_snapshot(
+                    self._config,
+                    bootstrap,
+                    vault_address_source=(
+                        "explicit"
+                        if self._config.mandated_vault_address
+                        else "predicted"
+                    ),
+                    mode="execute" if confirm else "plan",
+                    include_backfill_env=confirm,
+                )
+            finally:
+                await bridge.close()
+
+        return asyncio.run(_run_and_close())
+
     def _get_predict_account_overlay_status(
         self, sdk: WalletSdkProtocol
     ) -> WalletStatusSnapshot:
@@ -1065,6 +1274,7 @@ class WalletManager:
                     vault_deployed=resolution.vault_deployed,
                     vault_health=resolution.vault_health,
                     state_changing_flows_enabled=bridge.runtime_ready,
+                    bootstrap_preview=resolution.bootstrap_preview,
                 )
             finally:
                 await bridge.close()

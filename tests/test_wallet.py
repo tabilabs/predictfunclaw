@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from eth_abi import encode as abi_encode
+from eth_account import Account
+from eth_abi.abi import encode as abi_encode
 from web3 import Web3
 
 from lib.config import ConfigError, PredictConfig, WalletMode
@@ -29,6 +30,9 @@ from lib.wallet_manager import (
     WalletManager,
     WalletSdkProtocol,
 )
+
+
+EOA_PRIVATE_KEY = "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01"
 
 
 @dataclass
@@ -143,6 +147,7 @@ class FakeMandatedBridge:
         self.bootstrap_calls = 0
         self.predict_calls = 0
         self.health_check_calls = 0
+        self.bootstrap_modes: list[str] = []
         self.connect_loop_id: int | None = None
         self.close_loop_id: int | None = None
         self.close_called = False
@@ -208,6 +213,7 @@ class FakeMandatedBridge:
         funding_policy_options: dict[str, Any] | None = None,
     ) -> VaultBootstrapResult:
         self.bootstrap_calls += 1
+        self.bootstrap_modes.append(mode)
         assert factory is not None
         assert asset.startswith("0x")
         assert name
@@ -234,7 +240,7 @@ class FakeMandatedBridge:
         deployed = self.health_result is not None and self.health_error is None
         return VaultBootstrapResult(
             chainId=56,
-            mode=mode,
+            mode=cast(Any, mode),
             factory=factory,
             asset=asset,
             signerAddress=signer_address,
@@ -243,7 +249,7 @@ class FakeMandatedBridge:
             alreadyDeployed=deployed,
             deploymentStatus="confirmed" if deployed else "planned",
             authorityConfig=VaultBootstrapAuthorityConfig(
-                mode=authority_mode or "single_key",
+                mode=cast(Any, authority_mode or "single_key"),
                 authority=authority,
                 executor=executor or signer_address,
             ),
@@ -267,7 +273,7 @@ class FakeMandatedBridge:
             accountContext=None,
             fundingPolicy=None,
             envBlock="ERC_MANDATED_VAULT_ADDRESS=0x...",
-            configBlock="{\"vault\":\"0x...\"}",
+            configBlock='{"vault":"0x..."}',
         )
 
     async def prepare_create_vault(
@@ -582,12 +588,7 @@ def test_wallet_status_mandated_vault_predicts_address_when_not_explicit() -> No
             "PREDICT_ENV": "testnet",
             "PREDICT_STORAGE_DIR": "/tmp/predict",
             "PREDICT_WALLET_MODE": "mandated-vault",
-            "ERC_MANDATED_FACTORY_ADDRESS": "0x1111111111111111111111111111111111111111",
-            "ERC_MANDATED_VAULT_ASSET_ADDRESS": "0x4444444444444444444444444444444444444444",
-            "ERC_MANDATED_VAULT_NAME": "Mandated Vault",
-            "ERC_MANDATED_VAULT_SYMBOL": "MVLT",
-            "ERC_MANDATED_VAULT_AUTHORITY": "0x5555555555555555555555555555555555555555",
-            "ERC_MANDATED_VAULT_SALT": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
         }
     )
     bridge = FakeMandatedBridge(
@@ -601,6 +602,8 @@ def test_wallet_status_mandated_vault_predicts_address_when_not_explicit() -> No
     )
 
     payload = manager.get_status().to_dict()
+    preview = cast(dict[str, Any], payload["bootstrapPreview"])
+    tx_summary = cast(dict[str, Any], preview["txSummary"])
 
     assert payload["mode"] == "mandated-vault"
     assert payload["vaultAddress"] == "0x1234567890123456789012345678901234567890"
@@ -608,9 +611,44 @@ def test_wallet_status_mandated_vault_predicts_address_when_not_explicit() -> No
     assert payload["vaultDeployed"] is False
     assert payload["vaultHealth"] is None
     assert payload["stateChangingFlowsEnabled"] is True
+    assert preview["factory"] == "0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6"
+    assert preview["predictedVault"] == payload["vaultAddress"]
+    assert preview["signerAddress"] == Account.from_key(EOA_PRIVATE_KEY).address
+    assert preview["chainId"] == 97
+    assert preview["confirmationRequired"] is True
+    assert tx_summary["to"] == "0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6"
     assert bridge.bootstrap_calls == 1
+    assert bridge.bootstrap_modes == ["plan"]
     assert bridge.predict_calls == 0
     assert bridge.health_check_calls == 0
+
+
+def test_wallet_bootstrap_executes_and_returns_backfill_ready_payload() -> None:
+    config = PredictConfig.from_env(
+        {
+            "PREDICT_ENV": "testnet",
+            "PREDICT_STORAGE_DIR": "/tmp/predict",
+            "PREDICT_WALLET_MODE": "mandated-vault",
+            "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+        }
+    )
+    bridge = FakeMandatedBridge()
+    manager = WalletManager(config, bridge_factory=lambda _config: bridge)
+
+    payload = getattr(manager, "bootstrap_vault")(confirm=True).to_dict()
+    backfill_env = cast(dict[str, str], payload["backfillEnv"])
+
+    assert payload["mode"] == "execute"
+    assert payload["deployedVault"] == "0x1234567890123456789012345678901234567890"
+    assert payload["confirmationRequired"] is False
+    assert backfill_env["ERC_MANDATED_VAULT_ADDRESS"] == payload["deployedVault"]
+    assert (
+        backfill_env["ERC_MANDATED_FACTORY_ADDRESS"]
+        == "0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6"
+    )
+    assert backfill_env["ERC_MANDATED_CHAIN_ID"] == "97"
+    assert backfill_env["ERC_MANDATED_MCP_COMMAND"] == "erc-mandated-mcp"
+    assert bridge.bootstrap_modes == ["execute"]
 
 
 def test_wallet_status_mandated_vault_fails_closed_on_mcp_outage() -> None:
@@ -793,7 +831,9 @@ def test_wallet_status_predict_account_with_vault_overlay_exposes_route_and_role
     assert funding_task["kind"] == "submitFunding"
 
 
-def test_wallet_status_predict_account_overlay_reads_balances_outside_event_loop() -> None:
+def test_wallet_status_predict_account_overlay_reads_balances_outside_event_loop() -> (
+    None
+):
     config = PredictConfig.from_env(
         {
             "PREDICT_ENV": "testnet",
@@ -838,7 +878,9 @@ def test_wallet_status_predict_account_overlay_reads_balances_outside_event_loop
     assert payload["usdtBalanceWei"] == 30_000_000_000_000_000_000
 
 
-def test_wallet_status_predict_account_overlay_treats_empty_contract_reads_as_undeployed() -> None:
+def test_wallet_status_predict_account_overlay_treats_empty_contract_reads_as_undeployed() -> (
+    None
+):
     config = PredictConfig.from_env(
         {
             "PREDICT_ENV": "testnet",
@@ -922,12 +964,20 @@ def test_wallet_status_predict_account_overlay_computes_dynamic_adapter_root() -
     account_context = cast(dict[str, Any], orchestration["accountContext"])
     funding_plan = cast(dict[str, Any], orchestration["fundingPlan"])
     codehash = Web3.keccak(b"\x60\x60\x60\x40\x52")
-    expected_root = "0x" + Web3.keccak(
-        abi_encode(
-            ["address", "bytes32"],
-            [Web3.to_checksum_address("0x4444444444444444444444444444444444444444"), codehash],
-        )
-    ).hex()
+    expected_root = (
+        "0x"
+        + Web3.keccak(
+            abi_encode(
+                ["address", "bytes32"],
+                [
+                    Web3.to_checksum_address(
+                        "0x4444444444444444444444444444444444444444"
+                    ),
+                    codehash,
+                ],
+            )
+        ).hex()
+    )
 
     assert account_context["defaults"]["allowedAdaptersRoot"] == expected_root
     assert funding_plan["fundingContext"]["allowedAdaptersRoot"] == expected_root

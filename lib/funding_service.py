@@ -45,6 +45,7 @@ class DepositDetails:
     vault_address_source: str | None = None
     vault_exists: bool | None = None
     create_vault_preparation: dict[str, object] | None = None
+    bootstrap_preview: dict[str, object] | None = None
     funding_route: str | None = None
     predict_account_address: str | None = None
     trade_signer_address: str | None = None
@@ -69,6 +70,8 @@ class DepositDetails:
             payload["createVaultPreparation"] = self.create_vault_preparation
         elif self.create_vault_preparation is not None:
             payload["createVaultPreparation"] = self.create_vault_preparation
+        if self.bootstrap_preview is not None:
+            payload["bootstrapPreview"] = self.bootstrap_preview
         if self.funding_route is not None:
             payload["fundingRoute"] = self.funding_route
             payload["predictAccountAddress"] = self.predict_account_address
@@ -155,8 +158,12 @@ class FundingService:
         async def _load_and_close() -> DepositDetails:
             await bridge.connect()
             try:
-                bnb_balance = await load_wallet_bnb_balance_wei(sdk)
-                usdt_balance = await load_wallet_usdt_balance_wei(sdk)
+                bnb_balance = await load_wallet_bnb_balance_wei(
+                    cast(WalletSdkProtocol, sdk)
+                )
+                usdt_balance = await load_wallet_usdt_balance_wei(
+                    cast(WalletSdkProtocol, sdk)
+                )
                 orchestration = await build_vault_to_predict_account_orchestration(
                     self._config,
                     bridge,
@@ -201,6 +208,7 @@ class FundingService:
                 if (
                     not resolution.vault_deployed
                     and resolution.create_vault_prepare is not None
+                    and resolution.bootstrap_preview is None
                 ):
                     tx = resolution.create_vault_prepare.txRequest
                     preparation = {
@@ -214,6 +222,11 @@ class FundingService:
                         },
                         "broadcast": "manual-only",
                     }
+                bootstrap_preview = (
+                    resolution.bootstrap_preview.to_dict()
+                    if resolution.bootstrap_preview is not None
+                    else None
+                )
 
                 return DepositDetails(
                     mode=self._config.wallet_mode.value,
@@ -231,6 +244,7 @@ class FundingService:
                     vault_address_source=resolution.vault_address_source,
                     vault_exists=resolution.vault_deployed,
                     create_vault_preparation=preparation,
+                    bootstrap_preview=bootstrap_preview,
                 )
             finally:
                 await bridge.close()

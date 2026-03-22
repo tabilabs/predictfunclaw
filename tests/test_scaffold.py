@@ -90,6 +90,25 @@ def test_default_env_example_is_bootstrap_safe_for_first_install() -> None:
     assert "template.eoa.env" in env_text
     assert "template.predict-account.env" in env_text
     assert "template.mandated-vault.env" in env_text
+    assert "PREDICT_SMOKE_ENV=testnet" not in env_text
+    assert "PREDICT_SMOKE_API_BASE_URL=https://api-testnet.predict.fun" not in env_text
+
+
+def test_live_templates_are_mainnet_first() -> None:
+    predict_root = get_predict_root()
+
+    live_templates = [
+        "template.readonly.env",
+        "template.eoa.env",
+        "template.predict-account.env",
+        "template.mandated-vault.env",
+    ]
+
+    for template_name in live_templates:
+        text = (predict_root / template_name).read_text()
+        assert "PREDICT_ENV=mainnet" in text
+        assert "PREDICT_API_BASE_URL=https://api.predict.fun" in text
+        assert "api-testnet.predict.fun" not in text
 
 
 def test_legacy_dotenv_examples_match_publish_safe_templates() -> None:

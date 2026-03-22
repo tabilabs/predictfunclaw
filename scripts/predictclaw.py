@@ -25,9 +25,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-from lib.local_env import load_local_env
-
 SKILL_DIR = Path(__file__).resolve().parent.parent
+if str(SKILL_DIR) not in sys.path:
+    sys.path.insert(0, str(SKILL_DIR))
+
+from lib.local_env import load_local_env  # pyright: ignore[reportMissingImports]
+
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 HELP_TEXT = """PredictClaw CLI - predict.fun skill for OpenClaw.
@@ -131,12 +134,12 @@ def print_help() -> None:
     print("  OPENROUTER_API_KEY          hedge analysis model access")
     print()
     print("Notes:")
-    print("  - Default local posture is testnet or fixture mode.")
+    print("  - Default local posture is mainnet or fixture mode.")
     print(
         "  - Mainnet market reads and trading require PREDICT_API_KEY for authenticated predict.fun flows."
     )
     print(
-        "  - Testnet market reads use https://api-testnet.predict.fun and do not require PREDICT_API_KEY."
+        "  - Live packaged templates are mainnet-first and use https://api.predict.fun."
     )
     print(
         "  - Predict Account mode is supported through wallet subcommands and signed flows."

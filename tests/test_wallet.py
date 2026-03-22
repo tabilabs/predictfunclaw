@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Mapping, cast
 
 import pytest
 from eth_account import Account
@@ -203,14 +203,14 @@ class FakeMandatedBridge:
         symbol: str,
         salt: str,
         signer_address: str | None = None,
-        mode: str = "plan",
-        authority_mode: str | None = None,
+        mode: Any = "plan",
+        authority_mode: Any = None,
         authority: str | None = None,
         executor: str | None = None,
         create_account_context: bool | None = None,
         create_funding_policy: bool | None = None,
-        account_context_options: dict[str, Any] | None = None,
-        funding_policy_options: dict[str, Any] | None = None,
+        account_context_options: Mapping[str, Any] | None = None,
+        funding_policy_options: Mapping[str, Any] | None = None,
     ) -> VaultBootstrapResult:
         self.bootstrap_calls += 1
         self.bootstrap_modes.append(mode)
@@ -649,6 +649,75 @@ def test_wallet_bootstrap_executes_and_returns_backfill_ready_payload() -> None:
     assert backfill_env["ERC_MANDATED_CHAIN_ID"] == "97"
     assert backfill_env["ERC_MANDATED_MCP_COMMAND"] == "erc-mandated-mcp"
     assert bridge.bootstrap_modes == ["execute"]
+
+
+def test_wallet_bootstrap_confirm_bridges_execute_only_env_requirements() -> None:
+    config = PredictConfig.from_env(
+        {
+            "PREDICT_ENV": "testnet",
+            "PREDICT_STORAGE_DIR": "/tmp/predict",
+            "PREDICT_WALLET_MODE": "mandated-vault",
+            "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+        }
+    )
+    bridge = FakeMandatedBridge()
+    observed_config: PredictConfig | None = None
+
+    def bridge_factory(bridge_config: PredictConfig) -> FakeMandatedBridge:
+        nonlocal observed_config
+        observed_config = bridge_config
+        return bridge
+
+    manager = WalletManager(config, bridge_factory=bridge_factory)
+
+    manager.bootstrap_vault(confirm=True)
+
+    assert observed_config is not None
+    assert observed_config.mandated_enable_broadcast is True
+    assert observed_config.mandated_bootstrap_private_key_value == EOA_PRIVATE_KEY
+
+
+def test_wallet_status_preview_uses_bootstrap_signer_when_override_is_set() -> None:
+    bootstrap_key = "0x8f2a559490d0123eb5eb0f5d8d8c441f6df5e0a8fba4b4c8fdd0f760b6f6f4a2"
+    config = PredictConfig.from_env(
+        {
+            "PREDICT_ENV": "testnet",
+            "PREDICT_STORAGE_DIR": "/tmp/predict",
+            "PREDICT_WALLET_MODE": "mandated-vault",
+            "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+            "ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY": bootstrap_key,
+        }
+    )
+    bridge = FakeMandatedBridge(
+        health_error=MandatedVaultMcpError(
+            "Mandated-vault MCP tool vault_health_check failed: VAULT_NOT_DEPLOYED vault has no code"
+        )
+    )
+    manager = WalletManager(config, bridge_factory=lambda _config: bridge)
+
+    payload = manager.get_status().to_dict()
+    preview = cast(dict[str, Any], payload["bootstrapPreview"])
+
+    assert preview["signerAddress"] == Account.from_key(bootstrap_key).address
+
+
+def test_wallet_bootstrap_confirm_uses_bootstrap_signer_for_execute_path() -> None:
+    bootstrap_key = "0x8f2a559490d0123eb5eb0f5d8d8c441f6df5e0a8fba4b4c8fdd0f760b6f6f4a2"
+    config = PredictConfig.from_env(
+        {
+            "PREDICT_ENV": "testnet",
+            "PREDICT_STORAGE_DIR": "/tmp/predict",
+            "PREDICT_WALLET_MODE": "mandated-vault",
+            "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+            "ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY": bootstrap_key,
+        }
+    )
+    bridge = FakeMandatedBridge()
+    manager = WalletManager(config, bridge_factory=lambda _config: bridge)
+
+    payload = manager.bootstrap_vault(confirm=True).to_dict()
+
+    assert payload["signerAddress"] == Account.from_key(bootstrap_key).address
 
 
 def test_wallet_status_mandated_vault_fails_closed_on_mcp_outage() -> None:

@@ -555,6 +555,14 @@ class _SubprocessMcpClient:
         env["ERC_MANDATED_CONTRACT_VERSION"] = self._config.mandated_contract_version
         if self._config.mandated_chain_id is not None:
             env["ERC_MANDATED_CHAIN_ID"] = str(self._config.mandated_chain_id)
+        if self._config.mandated_enable_broadcast is not None:
+            env["ERC_MANDATED_ENABLE_BROADCAST"] = (
+                "1" if self._config.mandated_enable_broadcast else "0"
+            )
+        if self._config.mandated_bootstrap_private_key_value is not None:
+            env["ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY"] = (
+                self._config.mandated_bootstrap_private_key_value
+            )
         _apply_default_rpc_env(env, self._config)
 
         try:
@@ -758,7 +766,11 @@ class _SubprocessMcpClient:
             try:
                 body = await self._read_stdout_exactly(process, int(content_length))
                 payload = json.loads(body.decode("utf-8"))
-            except (ValueError, json.JSONDecodeError, asyncio.IncompleteReadError) as error:
+            except (
+                ValueError,
+                json.JSONDecodeError,
+                asyncio.IncompleteReadError,
+            ) as error:
                 raise MandatedVaultMcpUnavailableError(
                     self._redact(
                         f"Mandated-vault MCP emitted invalid JSON-RPC payload: {error}"
@@ -822,7 +834,9 @@ class _SubprocessMcpClient:
         while remaining > 0:
             chunk = await process.stdout.read(remaining)
             if not chunk:
-                raise asyncio.IncompleteReadError(partial=b"".join(chunks), expected=length)
+                raise asyncio.IncompleteReadError(
+                    partial=b"".join(chunks), expected=length
+                )
             chunks.append(chunk)
             remaining -= len(chunk)
 
@@ -858,6 +872,9 @@ class _SubprocessMcpClient:
             self._config.api_key.get_secret_value() if self._config.api_key else None,
             self._config.private_key_value,
             self._config.privy_private_key_value,
+            self._config.mandated_authority_private_key_value,
+            self._config.mandated_executor_private_key_value,
+            self._config.mandated_bootstrap_private_key_value,
             self._config.openrouter_api_key.get_secret_value()
             if self._config.openrouter_api_key
             else None,
@@ -912,8 +929,9 @@ class MandatedVaultMcpBridge:
 
     @property
     def runtime_ready(self) -> bool:
-        return self.supports_vault_bootstrap or not MANDATED_V1_REQUIRED_TOOLS.difference(
-            self.available_tools
+        return (
+            self.supports_vault_bootstrap
+            or not MANDATED_V1_REQUIRED_TOOLS.difference(self.available_tools)
         )
 
     async def connect(self) -> None:
@@ -1052,7 +1070,7 @@ class MandatedVaultMcpBridge:
                 else None,
             },
             tx_preparation=False,
-            required_tools=MANDATED_BOOTSTRAP_REQUIRED_TOOLS,
+            required_tools=tuple(MANDATED_BOOTSTRAP_REQUIRED_TOOLS),
         )
         return self._parse_result("vault_bootstrap", structured, VaultBootstrapResult)
 

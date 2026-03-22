@@ -467,6 +467,10 @@ Path(sys.argv[3]).write_text(
             "bscTestnetRpcUrl": os.getenv("BSC_TESTNET_RPC_URL"),
             "bscRpcUrl": os.getenv("BSC_RPC_URL"),
             "ercMandatedRpcUrl": os.getenv("ERC_MANDATED_RPC_URL"),
+            "ercMandatedEnableBroadcast": os.getenv("ERC_MANDATED_ENABLE_BROADCAST"),
+            "ercMandatedBootstrapPrivateKey": os.getenv(
+                "ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY"
+            ),
         }
     ),
     encoding="utf-8",
@@ -834,6 +838,58 @@ async def test_bridge_sets_default_rpc_url_for_bnb_mainnet_when_missing(
 
 
 @pytest.mark.asyncio
+async def test_bridge_passes_execute_only_broadcast_env_to_mcp_process(
+    tmp_path: Path,
+) -> None:
+    command = write_fake_mcp_server(
+        tmp_path,
+        tools=sorted(MANDATED_BOOTSTRAP_REQUIRED_TOOLS),
+        tool_results={
+            "vault_bootstrap": {
+                "structuredContent": {
+                    "result": {
+                        "chainId": 56,
+                        "mode": "execute",
+                        "factory": FACTORY_ADDRESS,
+                        "asset": ASSET_ADDRESS,
+                        "signerAddress": AUTHORITY_ADDRESS,
+                        "predictedVault": PREDICTED_VAULT,
+                        "deployedVault": PREDICTED_VAULT,
+                        "alreadyDeployed": True,
+                        "deploymentStatus": "confirmed",
+                        "authorityConfig": {
+                            "mode": "single_key",
+                            "authority": AUTHORITY_ADDRESS,
+                            "executor": AUTHORITY_ADDRESS,
+                        },
+                    }
+                }
+            }
+        },
+    )
+    config = PredictConfig.from_env(
+        mandated_env(
+            command,
+            PREDICT_PRIVATE_KEY=HEX64_A,
+            ERC_MANDATED_ENABLE_BROADCAST="1",
+            ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY=HEX64_B,
+        )
+    )
+    bridge = MandatedVaultMcpBridge(config)
+
+    try:
+        await bridge.connect()
+
+        observed = json.loads(
+            (tmp_path / "observed-env.json").read_text(encoding="utf-8")
+        )
+        assert observed["ercMandatedEnableBroadcast"] == "1"
+        assert observed["ercMandatedBootstrapPrivateKey"] == HEX64_B
+    finally:
+        await bridge.close()
+
+
+@pytest.mark.asyncio
 async def test_bridge_supports_vault_bootstrap_runtime_and_parses_plan_result(
     tmp_path: Path,
 ) -> None:
@@ -870,7 +926,7 @@ async def test_bridge_supports_vault_bootstrap_runtime_and_parses_plan_result(
                         "accountContext": build_account_context(),
                         "fundingPolicy": build_funding_policy(),
                         "envBlock": "ERC_MANDATED_VAULT_ADDRESS=0x...",
-                        "configBlock": "{\"vault\":\"0x...\"}",
+                        "configBlock": '{"vault":"0x..."}',
                     }
                 }
             }

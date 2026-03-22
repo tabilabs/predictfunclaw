@@ -7,6 +7,7 @@ from typing import Any, Callable, Mapping, Protocol
 
 from eth_abi.abi import encode as abi_encode
 from eth_account import Account
+from pydantic import SecretStr
 from predict_sdk import OrderBuilder, OrderBuilderOptions
 from predict_sdk._internal.contracts import (
     get_conditional_tokens_contract,
@@ -776,6 +777,22 @@ def _build_bootstrap_snapshot(
     )
 
 
+def _build_execute_bootstrap_config(config: PredictConfig) -> PredictConfig:
+    bootstrap_private_key = config.mandated_bootstrap_private_key_value
+    return config.model_copy(
+        update={
+            "mandated_enable_broadcast": (
+                True
+                if config.mandated_enable_broadcast is None
+                else config.mandated_enable_broadcast
+            ),
+            "mandated_bootstrap_private_key": SecretStr(bootstrap_private_key)
+            if bootstrap_private_key is not None
+            else None,
+        }
+    )
+
+
 async def resolve_mandated_vault(
     config: PredictConfig,
     bridge: MandatedVaultBridgeProtocol,
@@ -793,13 +810,14 @@ async def resolve_mandated_vault(
 
         if _supports_vault_bootstrap(bridge):
             assert config.mandated_vault_authority is not None
+            assert config.mandated_bootstrap_signer_address is not None
             bootstrap = await bridge.vault_bootstrap(
                 factory=config.mandated_factory_address,
                 asset=str(config.mandated_vault_asset_address),
                 name=str(config.mandated_vault_name),
                 symbol=str(config.mandated_vault_symbol),
                 salt=str(config.mandated_vault_salt),
-                signer_address=str(config.mandated_vault_authority),
+                signer_address=str(config.mandated_bootstrap_signer_address),
                 mode="plan",
                 authority_mode="single_key",
                 authority=str(config.mandated_vault_authority),
@@ -1153,7 +1171,10 @@ class WalletManager:
                 "wallet bootstrap-vault only supports mandated-vault mode."
             )
 
-        bridge = self._bridge_factory(self._config)
+        bootstrap_config = (
+            _build_execute_bootstrap_config(self._config) if confirm else self._config
+        )
+        bridge = self._bridge_factory(bootstrap_config)
 
         async def _run_and_close() -> MandatedVaultBootstrapSnapshot:
             await bridge.connect()
@@ -1162,26 +1183,29 @@ class WalletManager:
                     raise MandatedVaultMcpError(
                         "Mandated-vault MCP cannot perform bootstrap execute; missing required tool: vault_bootstrap."
                     )
-                assert self._config.mandated_vault_authority is not None
+                assert bootstrap_config.mandated_vault_authority is not None
+                assert bootstrap_config.mandated_bootstrap_signer_address is not None
                 bootstrap = await bridge.vault_bootstrap(
-                    factory=self._config.mandated_factory_address,
-                    asset=str(self._config.mandated_vault_asset_address),
-                    name=str(self._config.mandated_vault_name),
-                    symbol=str(self._config.mandated_vault_symbol),
-                    salt=str(self._config.mandated_vault_salt),
-                    signer_address=str(self._config.mandated_vault_authority),
+                    factory=bootstrap_config.mandated_factory_address,
+                    asset=str(bootstrap_config.mandated_vault_asset_address),
+                    name=str(bootstrap_config.mandated_vault_name),
+                    symbol=str(bootstrap_config.mandated_vault_symbol),
+                    salt=str(bootstrap_config.mandated_vault_salt),
+                    signer_address=str(
+                        bootstrap_config.mandated_bootstrap_signer_address
+                    ),
                     mode="execute" if confirm else "plan",
                     authority_mode="single_key",
-                    authority=str(self._config.mandated_vault_authority),
+                    authority=str(bootstrap_config.mandated_vault_authority),
                     create_account_context=False,
                     create_funding_policy=False,
                 )
                 return _build_bootstrap_snapshot(
-                    self._config,
+                    bootstrap_config,
                     bootstrap,
                     vault_address_source=(
                         "explicit"
-                        if self._config.mandated_vault_address
+                        if bootstrap_config.mandated_vault_address
                         else "predicted"
                     ),
                     mode="execute" if confirm else "plan",

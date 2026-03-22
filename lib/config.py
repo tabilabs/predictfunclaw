@@ -58,6 +58,8 @@ MANDATED_INPUT_ENV_NAMES = (
     "ERC_MANDATED_VAULT_SALT",
     "ERC_MANDATED_AUTHORITY_PRIVATE_KEY",
     "ERC_MANDATED_EXECUTOR_PRIVATE_KEY",
+    "ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY",
+    "ERC_MANDATED_ENABLE_BROADCAST",
     "ERC_MANDATED_CHAIN_ID",
     "ERC_MANDATED_ALLOWED_ADAPTERS_ROOT",
     "ERC_MANDATED_FUNDING_MAX_AMOUNT_PER_TX",
@@ -108,6 +110,8 @@ class PredictConfig(BaseModel):
     mandated_vault_salt: str | None = None
     mandated_authority_private_key: SecretStr | None = None
     mandated_executor_private_key: SecretStr | None = None
+    mandated_bootstrap_private_key: SecretStr | None = None
+    mandated_enable_broadcast: bool | None = None
     mandated_mcp_command: str = MANDATED_MCP_COMMAND_DEFAULT
     mandated_contract_version: str = MANDATED_CONTRACT_VERSION_DEFAULT
     mandated_chain_id: int | None = None
@@ -274,6 +278,23 @@ class PredictConfig(BaseModel):
         return self.mandated_authority_private_key_value
 
     @property
+    def mandated_bootstrap_private_key_value(self) -> str | None:
+        if self.mandated_bootstrap_private_key is not None:
+            return self.mandated_bootstrap_private_key.get_secret_value()
+        if (
+            self.wallet_mode == WalletMode.MANDATED_VAULT
+            and self.private_key_value is not None
+        ):
+            return self.private_key_value
+        return self.mandated_authority_private_key_value
+
+    @property
+    def mandated_bootstrap_signer_address(self) -> str | None:
+        if self.mandated_bootstrap_private_key_value is not None:
+            return Account.from_key(self.mandated_bootstrap_private_key_value).address
+        return self.mandated_vault_authority
+
+    @property
     def mandated_executor_address(self) -> str | None:
         if self.mandated_executor_private_key_value:
             return Account.from_key(self.mandated_executor_private_key_value).address
@@ -366,6 +387,12 @@ class PredictConfig(BaseModel):
                 mandated_executor_private_key=_secret_or_none(
                     source.get("ERC_MANDATED_EXECUTOR_PRIVATE_KEY")
                 ),
+                mandated_bootstrap_private_key=_secret_or_none(
+                    source.get("ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY")
+                ),
+                mandated_enable_broadcast=_bool_or_none(
+                    source.get("ERC_MANDATED_ENABLE_BROADCAST")
+                ),
                 mandated_mcp_command=_value_or_none(
                     source.get("ERC_MANDATED_MCP_COMMAND")
                 )
@@ -416,6 +443,7 @@ class PredictConfig(BaseModel):
                         source.get("PREDICT_PRIVY_PRIVATE_KEY"),
                         source.get("ERC_MANDATED_AUTHORITY_PRIVATE_KEY"),
                         source.get("ERC_MANDATED_EXECUTOR_PRIVATE_KEY"),
+                        source.get("ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY"),
                         source.get("OPENROUTER_API_KEY"),
                     ],
                 )
@@ -442,6 +470,20 @@ def _wallet_mode_or_none(raw: str | None) -> WalletMode | None:
 def _int_or_none(raw: str | None) -> int | None:
     value = _value_or_none(raw)
     return int(value) if value else None
+
+
+def _bool_or_none(raw: str | None) -> bool | None:
+    value = _value_or_none(raw)
+    if value is None:
+        return None
+    normalized = value.lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(
+        "ERC_MANDATED_ENABLE_BROADCAST must be one of: 1, 0, true, false, yes, no, on, off."
+    )
 
 
 def _default_mandated_vault_asset_address(

@@ -21,6 +21,9 @@ MANDATED_VAULT_ADDRESS = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
 MANDATED_AUTHORITY_PRIVATE_KEY = (
     "0x4f3edf983ac636a65a842ce7c78d9aa706d3b113bce036f5f4f6f0e34c0a3f8d"
 )
+MANDATED_BOOTSTRAP_PRIVATE_KEY = (
+    "0x8f2a559490d0123eb5eb0f5d8d8c441f6df5e0a8fba4b4c8fdd0f760b6f6f4a2"
+)
 MANDATED_EXECUTOR_PRIVATE_KEY = (
     "0x6c87575d3f0c7c0d9f95f4f61a4b8721e6b7d5f2d75f5ef1a304681140f64f57"
 )
@@ -297,6 +300,24 @@ def test_dedicated_mandated_executor_key_overrides_authority_fallback() -> None:
     assert (
         config.mandated_executor_address
         == Account.from_key(MANDATED_EXECUTOR_PRIVATE_KEY).address
+    )
+
+
+def test_dedicated_bootstrap_private_key_overrides_other_signer_fallbacks() -> None:
+    config = PredictConfig.from_env(
+        {
+            **base_env(),
+            "PREDICT_WALLET_MODE": "mandated-vault",
+            "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+            "ERC_MANDATED_AUTHORITY_PRIVATE_KEY": MANDATED_AUTHORITY_PRIVATE_KEY,
+            "ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY": MANDATED_BOOTSTRAP_PRIVATE_KEY,
+        }
+    )
+
+    assert config.mandated_bootstrap_private_key_value == MANDATED_BOOTSTRAP_PRIVATE_KEY
+    assert (
+        config.mandated_bootstrap_signer_address
+        == Account.from_key(MANDATED_BOOTSTRAP_PRIVATE_KEY).address
     )
 
 

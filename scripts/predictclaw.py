@@ -157,6 +157,9 @@ def print_help() -> None:
         "  - Pure mandated-vault bootstrap now defaults to preview-first onboarding; `wallet bootstrap-vault --confirm` is the only broadcast step."
     )
     print(
+        "  - `wallet bootstrap-vault --confirm` auto-bridges the execute-only MCP broadcast gate and bootstrap signer env for that subprocess."
+    )
+    print(
         "  - ERC_MANDATED_VAULT_ADDRESS selects an explicit deployed vault; otherwise the full derivation tuple lets the MCP predict the vault address."
     )
     print(

@@ -13,13 +13,13 @@ SKILL_DIR = Path(__file__).resolve().parent.parent
 if str(SKILL_DIR) not in sys.path:
     sys.path.insert(0, str(SKILL_DIR))
 
-import lib
+import lib  # pyright: ignore[reportMissingImports]
 
-from lib.config import ConfigError, PredictConfig
-from lib.env_backfill import backfill_env_file
-from lib.local_env import load_local_env, resolve_local_env_path
-from lib.mandated_mcp_bridge import MandatedVaultMcpError
-from lib.wallet_manager import WalletManager
+from lib.config import ConfigError, PredictConfig  # pyright: ignore[reportMissingImports]
+from lib.env_backfill import backfill_env_file  # pyright: ignore[reportMissingImports]
+from lib.local_env import load_local_env, resolve_local_env_path  # pyright: ignore[reportMissingImports]
+from lib.mandated_mcp_bridge import MandatedVaultMcpError  # pyright: ignore[reportMissingImports]
+from lib.wallet_manager import WalletManager  # pyright: ignore[reportMissingImports]
 
 FundingService = getattr(lib, "FundingService")
 
@@ -67,7 +67,7 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "Preview the pure mandated-vault bootstrap using the product-configured factory 0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6. "
             "Without --confirm this command only shows the predicted vault, chain, signer, and "
-            "transaction summary. Explicit confirmation is required before broadcast. With --confirm it executes MCP vault_bootstrap, then backfills "
+            "transaction summary. Explicit confirmation is required before broadcast. With --confirm it executes MCP vault_bootstrap, auto-bridges the execute-only broadcast gate and bootstrap signer env for that subprocess, then backfills "
             "the local .env with the deployed vault address and resolved values."
         ),
     )

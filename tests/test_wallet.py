@@ -603,6 +603,7 @@ def test_wallet_status_mandated_vault_predicts_address_when_not_explicit() -> No
 
     payload = manager.get_status().to_dict()
     preview = cast(dict[str, Any], payload["bootstrapPreview"])
+    permission_summary = cast(dict[str, Any], payload["permissionSummary"])
     tx_summary = cast(dict[str, Any], preview["txSummary"])
 
     assert payload["mode"] == "mandated-vault"
@@ -617,6 +618,18 @@ def test_wallet_status_mandated_vault_predicts_address_when_not_explicit() -> No
     assert preview["chainId"] == 97
     assert preview["confirmationRequired"] is True
     assert tx_summary["to"] == "0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6"
+    assert permission_summary["permissionModel"] == "mandated-vault-v1"
+    assert permission_summary["vaultAuthority"] == config.mandated_vault_authority
+    assert permission_summary["vaultExecutor"] == config.mandated_executor_address
+    assert (
+        permission_summary["bootstrapSigner"]
+        == config.mandated_bootstrap_signer_address
+    )
+    assert permission_summary["underlyingAsset"] == config.mandated_vault_asset_address
+    assert any(
+        "bootstrap signer can differ from authority" in note.lower()
+        for note in cast(list[str], permission_summary["safetyNotes"])
+    )
     assert bridge.bootstrap_calls == 1
     assert bridge.bootstrap_modes == ["plan"]
     assert bridge.predict_calls == 0
@@ -846,6 +859,7 @@ def test_wallet_status_predict_account_with_vault_overlay_exposes_route_and_role
 
     payload = manager.get_status().to_dict()
     orchestration = cast(dict[str, Any], payload["fundingOrchestration"])
+    permission_summary = cast(dict[str, Any], payload["permissionSummary"])
     account_context = cast(dict[str, Any], orchestration["accountContext"])
     funding_policy = cast(dict[str, Any], orchestration["fundingPolicy"])
     funding_target = cast(dict[str, Any], orchestration["fundingTarget"])
@@ -863,6 +877,17 @@ def test_wallet_status_predict_account_with_vault_overlay_exposes_route_and_role
     assert payload["vaultAddress"] == "0x2222222222222222222222222222222222222222"
     assert payload["vaultAddressSource"] == "explicit"
     assert payload["vaultExists"] is True
+    assert permission_summary["permissionModel"] == "vault-to-predict-account-overlay"
+    assert permission_summary["vaultAuthority"] == config.mandated_vault_authority
+    assert permission_summary["vaultExecutor"] == config.mandated_executor_address
+    assert (
+        permission_summary["bootstrapSigner"]
+        == config.mandated_bootstrap_signer_address
+    )
+    assert permission_summary["allowedTokenAddresses"] == [
+        config.mandated_vault_asset_address
+    ]
+    assert permission_summary["allowedRecipients"] == [payload["predictAccountAddress"]]
     assert account_context["executor"] == "0x5555555555555555555555555555555555555555"
     assert (
         account_context["defaults"]["allowedAdaptersRoot"]

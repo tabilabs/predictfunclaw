@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Callable, Mapping, Protocol
+from typing import Any, Callable, Mapping, Protocol, cast
 
 from eth_abi.abi import encode as abi_encode
 from eth_account import Account
@@ -465,6 +465,7 @@ class WalletStatusSnapshot:
     vault_address_source: str | None = None
     vault_exists: bool | None = None
     funding_orchestration: dict[str, object] | None = None
+    permission_summary: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, object]:
         payload: dict[str, object] = {
@@ -489,6 +490,47 @@ class WalletStatusSnapshot:
                     "fundingOrchestration": self.funding_orchestration,
                 }
             )
+        if self.permission_summary is not None:
+            payload["permissionSummary"] = self.permission_summary
+        return payload
+
+
+@dataclass
+class VaultPermissionSummary:
+    permission_model: str
+    vault_authority: str | None
+    vault_executor: str | None
+    bootstrap_signer: str | None
+    underlying_asset: str | None
+    share_token: str | None = None
+    allowed_token_addresses: list[str] | None = None
+    allowed_recipients: list[str] | None = None
+    max_amount_per_tx: str | None = None
+    max_amount_per_window: str | None = None
+    window_seconds: int | None = None
+    safety_notes: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "permissionModel": self.permission_model,
+            "vaultAuthority": self.vault_authority,
+            "vaultExecutor": self.vault_executor,
+            "bootstrapSigner": self.bootstrap_signer,
+            "underlyingAsset": self.underlying_asset,
+            "safetyNotes": self.safety_notes,
+        }
+        if self.share_token is not None:
+            payload["shareToken"] = self.share_token
+        if self.allowed_token_addresses is not None:
+            payload["allowedTokenAddresses"] = self.allowed_token_addresses
+        if self.allowed_recipients is not None:
+            payload["allowedRecipients"] = self.allowed_recipients
+        if self.max_amount_per_tx is not None:
+            payload["maxAmountPerTx"] = self.max_amount_per_tx
+        if self.max_amount_per_window is not None:
+            payload["maxAmountPerWindow"] = self.max_amount_per_window
+        if self.window_seconds is not None:
+            payload["windowSeconds"] = self.window_seconds
         return payload
 
 
@@ -609,6 +651,7 @@ class MandatedWalletStatusSnapshot:
     vault_health: VaultHealthCheckResult | None
     state_changing_flows_enabled: bool
     bootstrap_preview: MandatedVaultBootstrapSnapshot | None = None
+    permission_summary: VaultPermissionSummary | None = None
 
     def to_dict(self) -> dict[str, object]:
         health_payload: dict[str, object] | None = None
@@ -641,6 +684,8 @@ class MandatedWalletStatusSnapshot:
         }
         if self.bootstrap_preview is not None:
             payload["bootstrapPreview"] = self.bootstrap_preview.to_dict()
+        if self.permission_summary is not None:
+            payload["permissionSummary"] = self.permission_summary.to_dict()
         return payload
 
 
@@ -790,6 +835,51 @@ def _build_execute_bootstrap_config(config: PredictConfig) -> PredictConfig:
             if bootstrap_private_key is not None
             else None,
         }
+    )
+
+
+def _build_mandated_permission_summary(
+    config: PredictConfig,
+    *,
+    permission_model: str,
+    allowed_token_addresses: list[str] | None = None,
+    allowed_recipients: list[str] | None = None,
+    max_amount_per_tx: str | None = None,
+    max_amount_per_window: str | None = None,
+    window_seconds: int | None = None,
+    share_token: str | None = None,
+) -> VaultPermissionSummary:
+    safety_notes = [
+        "Authority controls vault mandate authority state.",
+        "Bootstrap signer can differ from authority and is only used for deployment/bootstrap execution.",
+    ]
+    if allowed_token_addresses or allowed_recipients:
+        safety_notes.append(
+            "Funding policy restricts asset movement to listed tokens/recipients and configured window caps."
+        )
+    else:
+        safety_notes.append(
+            "No overlay funding policy is active; bootstrap alone does not grant generalized transfer permissions."
+        )
+    if permission_model == "mandated-vault-v1":
+        safety_notes.append(
+            "Pure mandated-vault v1 still blocks generic wallet approve/withdraw trading parity flows."
+        )
+    return VaultPermissionSummary(
+        permission_model=permission_model,
+        vault_authority=config.mandated_vault_authority,
+        vault_executor=config.mandated_executor_address,
+        bootstrap_signer=config.mandated_bootstrap_signer_address,
+        underlying_asset=str(config.mandated_vault_asset_address)
+        if config.mandated_vault_asset_address
+        else None,
+        share_token=share_token,
+        allowed_token_addresses=allowed_token_addresses,
+        allowed_recipients=allowed_recipients,
+        max_amount_per_tx=max_amount_per_tx,
+        max_amount_per_window=max_amount_per_window,
+        window_seconds=window_seconds,
+        safety_notes=safety_notes,
     )
 
 
@@ -1250,6 +1340,30 @@ class WalletManager:
                     vault_address_source=orchestration.vault_address_source,
                     vault_exists=orchestration.vault_exists,
                     funding_orchestration=orchestration.to_dict(),
+                    permission_summary=_build_mandated_permission_summary(
+                        self._config,
+                        permission_model="vault-to-predict-account-overlay",
+                        allowed_token_addresses=cast(
+                            list[str] | None,
+                            orchestration.funding_policy.get("allowedTokenAddresses"),
+                        ),
+                        allowed_recipients=cast(
+                            list[str] | None,
+                            orchestration.funding_policy.get("allowedRecipients"),
+                        ),
+                        max_amount_per_tx=cast(
+                            str | None,
+                            orchestration.funding_policy.get("maxAmountPerTx"),
+                        ),
+                        max_amount_per_window=cast(
+                            str | None,
+                            orchestration.funding_policy.get("maxAmountPerWindow"),
+                        ),
+                        window_seconds=cast(
+                            int | None,
+                            orchestration.funding_policy.get("windowSeconds"),
+                        ),
+                    ).to_dict(),
                 )
             finally:
                 await bridge.close()
@@ -1299,6 +1413,10 @@ class WalletManager:
                     vault_health=resolution.vault_health,
                     state_changing_flows_enabled=bridge.runtime_ready,
                     bootstrap_preview=resolution.bootstrap_preview,
+                    permission_summary=_build_mandated_permission_summary(
+                        self._config,
+                        permission_model="mandated-vault-v1",
+                    ),
                 )
             finally:
                 await bridge.close()

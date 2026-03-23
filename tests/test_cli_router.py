@@ -80,6 +80,53 @@ trade_service.TradeService.buy = _fail_buy
     return patch_root
 
 
+def write_redeem_preview_sitecustomize(tmp_path: Path) -> Path:
+    patch_root = tmp_path / "redeem-preview-patch"
+    patch_root.mkdir(parents=True, exist_ok=True)
+    (patch_root / "sitecustomize.py").write_text(
+        """
+from __future__ import annotations
+
+from types import SimpleNamespace
+import lib.funding_service as funding_service
+
+
+def _preview_vault_redeem(self, *, share_token, holder=None, redeem_all=False):
+    return SimpleNamespace(
+        to_dict=lambda: {
+            'chainId': 56,
+            'chain': 'BNB Mainnet',
+            'shareToken': share_token,
+            'holder': holder or '0x7df0ba782D85B93266b595d496088ABFAc823950',
+            'shareBalanceWei': 28990000000000000000,
+            'requestedSharesWei': 28990000000000000000 if redeem_all else 0,
+            'redeemableNow': False,
+            'blockingReason': 'erc4626-max-redeem-blocked',
+            'recommendedNextAction': 'Inspect vault-specific withdrawal rules before any real redeem transaction.',
+            'shareTokenMetadata': {'name': 'Predict Mainnet USDT Vault', 'symbol': 'pmUSDT', 'decimals': 18},
+            'underlyingAsset': {'address': '0x55d398326f99059fF775485246999027B3197955', 'symbol': 'USDT', 'decimals': 18},
+            'configuredRoles': {
+                'vaultAuthority': '0xD2154B7B1f3DB28a1A654F1BF2f778e8C896139b',
+                'vaultExecutor': '0x7df0ba782D85B93266b595d496088ABFAc823950',
+                'bootstrapSigner': '0x7df0ba782D85B93266b595d496088ABFAc823950',
+            },
+            'holderRoleMatches': {
+                'vaultAuthority': False,
+                'vaultExecutor': True,
+                'bootstrapSigner': True,
+            },
+            'contractError': {'code': 'ERC4626ExceededMaxRedeem'},
+        }
+    )
+
+
+funding_service.FundingService.preview_vault_redeem = _preview_vault_redeem
+""".strip(),
+        encoding="utf-8",
+    )
+    return patch_root
+
+
 def test_top_level_help_exposes_planned_command_surface() -> None:
     result = run_predictclaw("--help")
 
@@ -167,6 +214,67 @@ def test_wallet_bootstrap_help_documents_preview_and_confirmation_flags() -> Non
     assert "preview" in combined.lower()
     assert "confirmation" in combined.lower()
     assert "0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6" in combined
+
+
+def test_wallet_redeem_vault_help_documents_preview_only_flow() -> None:
+    result = run_predictclaw("wallet", "redeem-vault", "--help")
+
+    assert result.returncode == 0
+    combined = result.stdout + result.stderr
+    assert "--share-token" in combined
+    assert "--holder" in combined
+    assert "--all" in combined
+    assert "preview" in combined.lower()
+    assert "underlying asset" in combined.lower()
+
+
+def test_wallet_redeem_vault_preview_outputs_structured_json(tmp_path: Path) -> None:
+    patch_root = write_redeem_preview_sitecustomize(tmp_path)
+    env = {
+        "PREDICT_ENV": "mainnet",
+        "PREDICT_STORAGE_DIR": "/tmp/predict",
+        "PREDICT_WALLET_MODE": "mandated-vault",
+        "PREDICT_API_KEY": "test-api-key",
+        "PREDICT_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
+        "PYTHONPATH": f"{patch_root}{os.pathsep}" + os.environ.get("PYTHONPATH", ""),
+    }
+
+    result = run_wallet(
+        "redeem-vault",
+        "--share-token",
+        "0x4a88c1c95d0f59ee87c3286ed23e9dcdf4cf08d7",
+        "--holder",
+        "0x7df0ba782D85B93266b595d496088ABFAc823950",
+        "--all",
+        "--json",
+        env=env,
+    )
+
+    assert result.returncode == 0
+    combined = result.stdout + result.stderr
+    assert '"blockingReason": "erc4626-max-redeem-blocked"' in combined
+    assert '"shareToken": "0x4a88c1c95d0f59ee87c3286ed23e9dcdf4cf08d7"' in combined
+
+
+def test_wallet_redeem_vault_confirm_fails_closed_until_supported() -> None:
+    env = {
+        "PREDICT_ENV": "mainnet",
+        "PREDICT_STORAGE_DIR": "/tmp/predict",
+        "PREDICT_WALLET_MODE": "mandated-vault",
+        "PREDICT_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
+    }
+
+    result = run_wallet(
+        "redeem-vault",
+        "--share-token",
+        "0x4a88c1c95d0f59ee87c3286ed23e9dcdf4cf08d7",
+        "--confirm",
+        env=env,
+    )
+
+    assert result.returncode == 1
+    combined = result.stdout + result.stderr
+    assert "preview-only" in combined.lower()
 
 
 def test_wallet_status_and_deposit_fail_cleanly_when_mcp_is_unavailable() -> None:

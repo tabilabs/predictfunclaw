@@ -7,7 +7,7 @@ import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 if str(SKILL_DIR) not in sys.path:
@@ -78,6 +78,41 @@ def build_parser() -> argparse.ArgumentParser:
     )
     bootstrap.add_argument("--json", action="store_true")
     bootstrap.set_defaults(handler=_handle_bootstrap_vault)
+
+    redeem_vault = subparsers.add_parser(
+        "redeem-vault",
+        help="Preview whether vault share tokens can be redeemed into the underlying asset.",
+        description=(
+            "Preview vault share redemption without broadcasting. This command inspects the share token, "
+            "underlying asset, current share balance, ERC4626 redeem limits, and any blocking contract error."
+        ),
+    )
+    redeem_vault.add_argument(
+        "--preview",
+        action="store_true",
+        help="Explicitly request preview mode (current implementation is preview-only).",
+    )
+    redeem_vault.add_argument(
+        "--share-token",
+        required=True,
+        help="Vault share token address to inspect.",
+    )
+    redeem_vault.add_argument(
+        "--holder",
+        help="Holder address to inspect. Defaults to the configured executor/bootstrap/auth signer when available.",
+    )
+    redeem_vault.add_argument(
+        "--all",
+        action="store_true",
+        help="Preview redemption of the holder's full current share balance.",
+    )
+    redeem_vault.add_argument(
+        "--confirm",
+        action="store_true",
+        help="Reserved for future execution support; current implementation is preview-only.",
+    )
+    redeem_vault.add_argument("--json", action="store_true")
+    redeem_vault.set_defaults(handler=_handle_redeem_vault)
 
     withdraw = subparsers.add_parser(
         "withdraw",
@@ -155,6 +190,26 @@ def _handle_status(args: argparse.Namespace) -> int:
             print(f"Authority Epoch: {health.get('authorityEpoch')}")
             print(f"Nonce Threshold: {health.get('nonceThreshold')}")
             print(f"Total Assets: {health.get('totalAssets')}")
+        permission_summary = payload.get("permissionSummary")
+        if isinstance(permission_summary, dict):
+            print(f"Vault Authority: {permission_summary.get('vaultAuthority')}")
+            print(f"Vault Executor: {permission_summary.get('vaultExecutor')}")
+            print(f"Bootstrap Signer: {permission_summary.get('bootstrapSigner')}")
+            print(f"Underlying Asset: {permission_summary.get('underlyingAsset')}")
+            if permission_summary.get("allowedTokenAddresses"):
+                print(
+                    "Allowed Tokens: "
+                    + ", ".join(
+                        cast(list[str], permission_summary["allowedTokenAddresses"])
+                    )
+                )
+            if permission_summary.get("allowedRecipients"):
+                print(
+                    "Allowed Recipients: "
+                    + ", ".join(
+                        cast(list[str], permission_summary["allowedRecipients"])
+                    )
+                )
         return 0
 
     approvals = payload.get("approvals")
@@ -226,6 +281,12 @@ def _handle_deposit(args: argparse.Namespace) -> int:
         )
         print(f"Vault Exists: {'yes' if payload.get('vaultExists') else 'no'}")
         print("Accepted Assets: BNB, USDT")
+        permission_summary = payload.get("permissionSummary")
+        if isinstance(permission_summary, dict):
+            print(f"Vault Authority: {permission_summary.get('vaultAuthority')}")
+            print(f"Vault Executor: {permission_summary.get('vaultExecutor')}")
+            print(f"Bootstrap Signer: {permission_summary.get('bootstrapSigner')}")
+            print(f"Underlying Asset: {permission_summary.get('underlyingAsset')}")
         preparation = payload.get("createVaultPreparation")
         if isinstance(preparation, dict):
             tx_summary = preparation.get("txSummary", {})
@@ -247,6 +308,25 @@ def _handle_deposit(args: argparse.Namespace) -> int:
         )
         print(f"Vault Exists: {'yes' if payload.get('vaultExists') else 'no'}")
         print("Accepted Assets: BNB, USDT")
+        permission_summary = payload.get("permissionSummary")
+        if isinstance(permission_summary, dict):
+            print(f"Vault Authority: {permission_summary.get('vaultAuthority')}")
+            print(f"Vault Executor: {permission_summary.get('vaultExecutor')}")
+            print(f"Bootstrap Signer: {permission_summary.get('bootstrapSigner')}")
+            if permission_summary.get("allowedTokenAddresses"):
+                print(
+                    "Allowed Tokens: "
+                    + ", ".join(
+                        cast(list[str], permission_summary["allowedTokenAddresses"])
+                    )
+                )
+            if permission_summary.get("allowedRecipients"):
+                print(
+                    "Allowed Recipients: "
+                    + ", ".join(
+                        cast(list[str], permission_summary["allowedRecipients"])
+                    )
+                )
         return 0
 
     accepted_assets = ", ".join(details.accepted_assets)
@@ -299,6 +379,60 @@ def _handle_bootstrap_vault(args: argparse.Namespace) -> int:
         print(
             "Run `predictclaw wallet bootstrap-vault --confirm --json` to broadcast and backfill .env."
         )
+    return 0
+
+
+def _handle_redeem_vault(args: argparse.Namespace) -> int:
+    if not args.preview and not args.confirm:
+        args.preview = True
+    if args.confirm:
+        print(
+            "wallet redeem-vault is currently preview-only; run with --json to inspect redeemability before any future confirm path is enabled."
+        )
+        return 1
+
+    try:
+        preview = _load_funding_service().preview_vault_redeem(
+            share_token=args.share_token,
+            holder=args.holder,
+            redeem_all=args.all,
+        )
+    except ConfigError as error:
+        print(str(error))
+        return 1
+
+    payload = preview.to_dict()
+    if args.json:
+        print(json.dumps(payload, indent=2))
+        return 0
+
+    print(f"Chain: {payload['chain']} ({payload['chainId']})")
+    print(f"Share Token: {payload['shareToken']}")
+    print(f"Holder: {payload['holder']}")
+    metadata = payload.get("shareTokenMetadata", {})
+    if isinstance(metadata, dict):
+        print(f"Share Token Symbol: {metadata.get('symbol')}")
+        print(f"Share Token Name: {metadata.get('name')}")
+    underlying = payload.get("underlyingAsset", {})
+    if isinstance(underlying, dict):
+        print(
+            f"Underlying Asset: {underlying.get('address')} ({underlying.get('symbol')})"
+        )
+    print(f"Share Balance (wei): {payload['shareBalanceWei']}")
+    print(f"Requested Shares (wei): {payload['requestedSharesWei']}")
+    if payload.get("previewRedeemWei") is not None:
+        print(f"Preview Redeem (wei): {payload['previewRedeemWei']}")
+    if payload.get("maxRedeemWei") is not None:
+        print(f"Max Redeem (wei): {payload['maxRedeemWei']}")
+    if payload.get("maxWithdrawWei") is not None:
+        print(f"Max Withdraw (wei): {payload['maxWithdrawWei']}")
+    print(f"Redeemable Now: {'yes' if payload['redeemableNow'] else 'no'}")
+    if payload.get("blockingReason") is not None:
+        print(f"Blocking Reason: {payload['blockingReason']}")
+    contract_error = payload.get("contractError")
+    if isinstance(contract_error, dict):
+        print(f"Contract Error: {contract_error.get('code')}")
+    print(f"Next Action: {payload['recommendedNextAction']}")
     return 0
 
 

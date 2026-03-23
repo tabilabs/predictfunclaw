@@ -85,6 +85,9 @@ def print_help() -> None:
     print("  wallet approve              Set predict.fun approvals")
     print("  wallet deposit              Show funding address and asset guidance")
     print("  wallet bootstrap-vault      Preview or confirm mandated vault deployment")
+    print(
+        "  wallet redeem-vault         Preview vault-share redemption into the underlying asset"
+    )
     print("  wallet withdraw ...         Withdraw USDT or BNB to an external address")
     print("  buy <market_id> YES|NO <amount>")
     print(
@@ -117,6 +120,12 @@ def print_help() -> None:
     print("  ERC_MANDATED_VAULT_SYMBOL   Vault symbol for predicted vault lookup")
     print("  ERC_MANDATED_VAULT_AUTHORITY Authority / create-vault preparer address")
     print("  ERC_MANDATED_VAULT_SALT     Deterministic salt for predicted vault lookup")
+    print(
+        "  ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY Optional execute-mode bootstrap signer override"
+    )
+    print(
+        "  ERC_MANDATED_ENABLE_BROADCAST Optional execute-mode MCP broadcast gate override"
+    )
     print(
         "  ERC_MANDATED_MCP_COMMAND    MCP launcher for vault overlay / mandated-vault mode"
     )
@@ -158,6 +167,12 @@ def print_help() -> None:
     )
     print(
         "  - `wallet bootstrap-vault --confirm` auto-bridges the execute-only MCP broadcast gate and bootstrap signer env for that subprocess."
+    )
+    print(
+        "  - wallet status/deposit JSON expose vaultAuthority, vaultExecutor, bootstrapSigner, allowedTokenAddresses, and allowedRecipients when vault permissions are configured."
+    )
+    print(
+        "  - wallet redeem-vault is preview-only and reports redeemableNow/blockingReason before any future redeem execution path."
     )
     print(
         "  - ERC_MANDATED_VAULT_ADDRESS selects an explicit deployed vault; otherwise the full derivation tuple lets the MCP predict the vault address."

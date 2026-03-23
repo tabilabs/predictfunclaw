@@ -227,10 +227,13 @@ The optional `ERC_MANDATED_FUNDING_*` envs cap Vault→Predict transfers by per-
 - `predict-account` requires both `PREDICT_ACCOUNT_ADDRESS` and `PREDICT_PRIVY_PRIVATE_KEY`.
 - `wallet deposit` shows the funding address for the active signer mode.
 - `wallet bootstrap-vault` is the pure mandated-vault preview / confirmation command.
+- `wallet redeem-vault --preview --json` inspects vault-share redeemability before any real redeem flow is attempted.
+- Redeem preview returns machine-readable `redeemableNow`, `blockingReason`, and `contractError` fields, including contract errors such as `ERC4626ExceededMaxRedeem`.
 - `wallet withdraw` performs safety validation before any transfer logic.
 - In pure `mandated-vault`, `wallet status` and `wallet bootstrap-vault` are the intended v1 entry points.
 - Default bootstrap only needs the signer EOA, deployment fee funding, and any optional `ERC_MANDATED_FUNDING_*` amount caps.
 - In `predict-account + ERC_MANDATED_*` overlay, `wallet status` / `wallet deposit` expose `vault-to-predict-account` funding semantics while Predict Account remains the trade identity.
+- Vault-related JSON also exposes `vaultAuthority`, `vaultExecutor`, `bootstrapSigner`, `allowedTokenAddresses`, and `allowedRecipients` so OpenClaw can reason about configured permissions.
 - Overlay `buy` can proceed when the Predict Account balance is sufficient; otherwise it returns deterministic `funding-required` guidance that points to `wallet deposit --json`.
 - Pure `mandated-vault` needs a working `ERC_MANDATED_MCP_COMMAND`; overlay mode also needs `ERC_MANDATED_VAULT_ASSET_ADDRESS` and `ERC_MANDATED_VAULT_AUTHORITY` for funding orchestration.
 - To detect or install the runtime and auto-fill the command entry, run `cd {baseDir} && uv run python scripts/predictclaw.py setup mandated-mcp --install --write-env`.
@@ -244,6 +247,7 @@ cd {baseDir} && uv run python scripts/predictclaw.py wallet status --json
 cd {baseDir} && uv run python scripts/predictclaw.py wallet deposit --json
 cd {baseDir} && uv run python scripts/predictclaw.py wallet bootstrap-vault --json
 cd {baseDir} && uv run python scripts/predictclaw.py wallet bootstrap-vault --confirm --json
+cd {baseDir} && uv run python scripts/predictclaw.py wallet redeem-vault --share-token 0x4a88c1c95d0f59ee87c3286ed23e9dcdf4cf08d7 --holder 0x7df0ba782D85B93266b595d496088ABFAc823950 --all --preview --json
 cd {baseDir} && uv run python scripts/predictclaw.py wallet withdraw usdt 1 0xb30741673D351135Cf96564dfD15f8e135f9C310 --json
 ```
 

@@ -11,6 +11,7 @@ DOC_COMMANDS = [
     "wallet approve",
     "wallet deposit",
     "wallet bootstrap-vault",
+    "wallet redeem-vault",
     "wallet withdraw usdt",
     "wallet withdraw bnb",
     "buy 123 YES 25",
@@ -112,6 +113,29 @@ def test_docs_cover_wallet_modes_and_mandated_vault_boundaries() -> None:
         assert "vault contract policy authorizes" in text.lower()
         assert "funding-required" in text
         assert "Predict Account remains" in text
+        assert "vaultAuthority" in text
+        assert "vaultExecutor" in text
+        assert "bootstrapSigner" in text
+        assert "allowedTokenAddresses" in text
+        assert "allowedRecipients" in text
+
+
+def test_docs_explain_redeem_preview_only_flow() -> None:
+    predict_root = get_predict_root()
+    readme = (predict_root / "README.md").read_text()
+    skill = (predict_root / "SKILL.md").read_text()
+    readme_zh = (predict_root / "README.zh-CN.md").read_text()
+
+    for text in [readme, skill]:
+        assert "wallet redeem-vault --preview --json" in text
+        assert "redeemableNow" in text
+        assert "blockingReason" in text
+        assert "ERC4626ExceededMaxRedeem" in text
+        assert "preview-only" in text
+
+    assert "wallet redeem-vault --preview --json" in readme_zh
+    assert "redeemableNow" in readme_zh
+    assert "blockingReason" in readme_zh
 
 
 def test_docs_explain_flat_metadata_vs_mode_specific_runtime_requirements() -> None:

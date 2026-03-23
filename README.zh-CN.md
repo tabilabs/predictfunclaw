@@ -362,6 +362,7 @@ uv run python scripts/predictclaw.py hedge analyze 101 202 --json
 - `wallet deposit` 会展示当前有效的 funding address 与可接受资产（`BNB`、`USDT`）。
 - `wallet bootstrap-vault` 是 pure mandated-vault 的预览 / 确认入口。
 - 默认 bootstrap 流程会使用固定 factory `0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6`，并在确认成功后回填 `.env`。
+- `wallet redeem-vault --preview --json` 会预检 vault share 赎回，并返回 `redeemableNow`、`blockingReason` 以及像 `ERC4626ExceededMaxRedeem` 这样的合约错误。
 - `wallet withdraw` 在尝试执行转账逻辑前会先验证目标地址 checksum、金额为正、余额充足以及 BNB gas 余量。
 - 在 fixture 模式下，withdraw 会返回确定性的占位 tx hash，而不会触链。
 - 在 `predict-account + ERC_MANDATED_*` overlay 中，`wallet status` / `wallet deposit` 会暴露：
@@ -372,9 +373,20 @@ uv run python scripts/predictclaw.py hedge analyze 101 202 --json
 - Predict Account remains 入金地址与交易账户。
 - 资金目标是 Predict Account，而不是 Vault，也不是 owner EOA。
 - 可选的 Vault funding-policy 环境变量允许你限制 Vault→Predict 转账的单笔额度、窗口累计额度和窗口时长。
+- 与 vault 相关的 JSON 现在还会提供 `vaultAuthority`、`vaultExecutor`、`bootstrapSigner`、`allowedTokenAddresses`、`allowedRecipients`，方便用户和 OpenClaw 直接理解权限边界。
 - 这些 funding-policy 金额使用 raw token units；以 BSC mainnet USDT（18 decimals）为例：`5 U = 5000000000000000000`，`10 U = 10000000000000000000`。
 - 如果 Predict Account 已有足够余额，`buy` 会继续走官方 Predict Account 下单路径。
 - 如果余额不足，`buy` 会以确定性的 `funding-required` 引导失败，并提示用户查看 `wallet deposit --json`；当前本地 signer 上下文不会自动执行 vault 资金腿。
+
+### 赎回预检
+
+在任何真实赎回动作之前，先使用 preview-only 预检：
+
+```bash
+uv run python scripts/predictclaw.py wallet redeem-vault --share-token 0x4a88c1c95d0f59ee87c3286ed23e9dcdf4cf08d7 --holder 0x7df0ba782D85B93266b595d496088ABFAc823950 --all --preview --json
+```
+
+这个命令会读取 share token、底层资产、`maxRedeem`、`maxWithdraw` 和一次模拟赎回调用，并输出 `redeemableNow`、`blockingReason`、`contractError`。当前版本故意保持 `preview-only`，不会广播真实赎回交易。
 
 ## 运行模式
 

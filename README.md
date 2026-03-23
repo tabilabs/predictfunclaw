@@ -360,6 +360,7 @@ uv run python scripts/predictclaw.py hedge analyze 101 202 --json
 - `wallet deposit` shows the active funding address and accepted assets (`BNB`, `USDT`).
 - `wallet bootstrap-vault` is the pure mandated-vault preview / confirmation entry point.
 - The default bootstrap flow uses the fixed factory `0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6` and backfills `.env` after a confirmed deployment.
+- `wallet redeem-vault --preview --json` previews vault-share redemption and reports `redeemableNow`, `blockingReason`, and decoded contract errors such as `ERC4626ExceededMaxRedeem`.
 - `wallet withdraw` validates checksum destination, positive amount, available balance, and BNB gas headroom before attempting transfer logic.
 - In fixture mode, withdraw commands return deterministic placeholder transaction hashes instead of touching a chain.
 - In `predict-account + ERC_MANDATED_*` overlay, `wallet status` / `wallet deposit` expose:
@@ -370,9 +371,20 @@ uv run python scripts/predictclaw.py hedge analyze 101 202 --json
 - Predict Account remains the deposit address / trading account.
 - The funding target is the Predict Account, not the Vault and not the owner EOA.
 - Optional Vault funding-policy envs let you cap Vault→Predict transfers by per-tx amount, cumulative window amount, and window duration.
+- Vault-related JSON now also surfaces `vaultAuthority`, `vaultExecutor`, `bootstrapSigner`, `allowedTokenAddresses`, and `allowedRecipients` so users and OpenClaw can reason about permissions directly.
 - Those funding-policy amounts use raw token units; for BSC mainnet USDT (18 decimals), `5 U = 5000000000000000000` and `10 U = 10000000000000000000`.
 - If the Predict Account already has enough balance, `buy` continues through the normal official Predict Account order path.
 - If balance is short, `buy` fails cleanly with deterministic `funding-required` guidance and points users to `wallet deposit --json`; it does not auto-execute the vault funding leg in the current local signer context.
+
+### Redeem preview
+
+Use the preview-only redeem diagnostic before attempting any future exit flow:
+
+```bash
+uv run python scripts/predictclaw.py wallet redeem-vault --share-token 0x4a88c1c95d0f59ee87c3286ed23e9dcdf4cf08d7 --holder 0x7df0ba782D85B93266b595d496088ABFAc823950 --all --preview --json
+```
+
+This reads the share token, underlying asset, `maxRedeem`, `maxWithdraw`, and a simulated redeem call. The response includes `redeemableNow`, `blockingReason`, and `contractError`. The current flow is intentionally `preview-only`.
 
 ## Runtime Modes
 

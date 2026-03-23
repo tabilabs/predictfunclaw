@@ -37,7 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     status = subparsers.add_parser(
         "status",
-        help="Show wallet mode, deposit address, balances, and approval readiness.",
+        help="Show wallet mode, funding guidance, balances, and approval readiness.",
     )
     status.add_argument("--json", action="store_true")
     status.set_defaults(handler=_handle_status)
@@ -51,10 +51,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     deposit = subparsers.add_parser(
         "deposit",
-        help="Show the active funding address, account mode, chain, and accepted assets.",
+        help="Show manual top-up guidance, trading recipient, chain, and accepted assets.",
         description=(
-            "Display the wallet funding address for the current mode. EOA mode deposits to the signer "
-            "address directly. Predict Account mode deposits to the Predict Account funding address. "
+            "Display funding guidance for the current mode. EOA mode deposits to the signer address directly. "
+            "Predict Account overlay mode separates the manual top-up address, the Predict Account trading recipient, "
+            "and the vault orchestration address so users do not mistake vault metadata for a manual funding target. "
             "BNB is required for gas and USDT is the supported trading asset."
         ),
     )
@@ -235,11 +236,14 @@ def _handle_status(args: argparse.Namespace) -> int:
     )
     if payload.get("fundingRoute") == "vault-to-predict-account":
         print(f"Funding Route: {payload.get('fundingRoute')}")
-        print(f"Predict Account Address: {payload.get('predictAccountAddress')}")
+        print(f"Manual Top-Up Address: {payload.get('manualTopUpAddress')}")
+        print(f"Predict Account Recipient: {payload.get('predictAccountAddress')}")
+        print(f"Trading Identity Address: {payload.get('tradingIdentityAddress')}")
         print(f"Trade Signer Address: {payload.get('tradeSignerAddress')}")
         print(
-            f"Funding Vault Address: {payload.get('vaultAddress')} ({payload.get('vaultAddressSource', 'unknown')})"
+            f"Orchestration Vault Address: {payload.get('orchestrationVaultAddress')} ({payload.get('vaultAddressSource', 'unknown')})"
         )
+        print(f"Manual Top-Up Guidance: {payload.get('manualTopUpGuidance')}")
     return 0
 
 
@@ -277,7 +281,7 @@ def _handle_deposit(args: argparse.Namespace) -> int:
     if payload.get("mode") == "mandated-vault":
         print(f"Mode: {payload['mode']}")
         print(
-            f"Funding Vault Address: {payload['fundingAddress']} ({payload.get('vaultAddressSource', 'unknown')})"
+            f"Vault Address: {payload['fundingAddress']} ({payload.get('vaultAddressSource', 'unknown')})"
         )
         print(f"Vault Exists: {'yes' if payload.get('vaultExists') else 'no'}")
         print("Accepted Assets: BNB, USDT")
@@ -301,11 +305,14 @@ def _handle_deposit(args: argparse.Namespace) -> int:
     if payload.get("fundingRoute") == "vault-to-predict-account":
         print(f"Mode: {payload['mode']}")
         print(f"Funding Route: {payload['fundingRoute']}")
-        print(f"Predict Account Address: {payload['predictAccountAddress']}")
+        print(f"Manual Top-Up Address: {payload.get('manualTopUpAddress')}")
+        print(f"Predict Account Recipient: {payload['predictAccountAddress']}")
+        print(f"Trading Identity Address: {payload.get('tradingIdentityAddress')}")
         print(f"Trade Signer Address: {payload['tradeSignerAddress']}")
         print(
-            f"Funding Vault Address: {payload['vaultAddress']} ({payload.get('vaultAddressSource', 'unknown')})"
+            f"Orchestration Vault Address: {payload.get('orchestrationVaultAddress')} ({payload.get('vaultAddressSource', 'unknown')})"
         )
+        print(f"Manual Top-Up Guidance: {payload.get('manualTopUpGuidance')}")
         print(f"Vault Exists: {'yes' if payload.get('vaultExists') else 'no'}")
         print("Accepted Assets: BNB, USDT")
         permission_summary = payload.get("permissionSummary")

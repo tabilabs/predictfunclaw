@@ -83,7 +83,7 @@ def print_help() -> None:
     )
     print("  wallet status               Show wallet mode, balances, and readiness")
     print("  wallet approve              Set predict.fun approvals")
-    print("  wallet deposit              Show funding address and asset guidance")
+    print("  wallet deposit              Show manual top-up guidance and asset roles")
     print("  wallet bootstrap-vault      Preview or confirm mandated vault deployment")
     print(
         "  wallet redeem-vault         Preview vault-share redemption into the underlying asset"
@@ -103,7 +103,7 @@ def print_help() -> None:
     print(
         "  PREDICT_WALLET_MODE         explicit mode override: read-only, eoa, predict-account, or mandated-vault"
     )
-    print("  PREDICT_PRIVATE_KEY         EOA trading credential")
+    print("  PREDICT_EOA_PRIVATE_KEY     EOA trading credential")
     print("  PREDICT_ACCOUNT_ADDRESS     Predict Account smart-wallet address")
     print(
         "  PREDICT_PRIVY_PRIVATE_KEY   Privy-exported signer for Predict Account mode"
@@ -169,7 +169,7 @@ def print_help() -> None:
         "  - `wallet bootstrap-vault --confirm` auto-bridges the execute-only MCP broadcast gate and bootstrap signer env for that subprocess."
     )
     print(
-        "  - wallet status/deposit JSON expose vaultAuthority, vaultExecutor, bootstrapSigner, allowedTokenAddresses, and allowedRecipients when vault permissions are configured."
+        "  - wallet status/deposit JSON expose manualTopUpAddress, tradingIdentityAddress, orchestrationVaultAddress, vaultAuthority, vaultExecutor, bootstrapSigner, allowedTokenAddresses, and allowedRecipients when vault permissions are configured."
     )
     print(
         "  - wallet redeem-vault is preview-only and reports redeemableNow/blockingReason before any future redeem execution path."
@@ -181,7 +181,7 @@ def print_help() -> None:
         "  - Product default factory is 0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6, and confirmed bootstrap backfills the local .env with the deployed vault address and resolved values."
     )
     print(
-        "  - Overlay wallet status/deposit expose `vault-to-predict-account` routing: Predict Account stays the trading identity while Vault funds it, and undeployed vault setup remains manual-only."
+        "  - Overlay wallet status/deposit expose `vault-to-predict-account` routing with explicit manual top-up vs orchestration-vault roles: Predict Account stays the trading identity while Vault funds it, and undeployed vault setup remains manual-only."
     )
     print(
         "  - Trust boundary: the MCP orchestrates transport/preparation; the vault contract policy authorizes what execution is allowed."

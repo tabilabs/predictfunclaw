@@ -23,6 +23,7 @@ from .wallet_manager import (
     MandatedVaultBridgeProtocol,
     PredictSdkWallet,
     VaultPermissionSummary,
+    _overlay_address_guidance_payload,
     _build_mandated_permission_summary,
     WalletSdkProtocol,
     build_vault_to_predict_account_orchestration,
@@ -174,6 +175,12 @@ class DepositDetails:
             payload["tradeSignerAddress"] = self.trade_signer_address
             payload["vaultAddress"] = self.vault_address
             payload["fundingOrchestration"] = self.funding_orchestration
+            payload.update(
+                _overlay_address_guidance_payload(
+                    predict_account_address=self.predict_account_address,
+                    vault_address=self.vault_address,
+                )
+            )
         return payload
 
 
@@ -620,7 +627,7 @@ class FundingService:
     def _require_sdk(self) -> TransferCapableWallet:
         if self._config.auth_signer_address is None:
             raise ConfigError(
-                "Wallet actions require signer configuration. Set PREDICT_PRIVATE_KEY or both PREDICT_ACCOUNT_ADDRESS and PREDICT_PRIVY_PRIVATE_KEY."
+                "Wallet actions require signer configuration. Set PREDICT_EOA_PRIVATE_KEY or both PREDICT_ACCOUNT_ADDRESS and PREDICT_PRIVY_PRIVATE_KEY."
             )
         return self._sdk_factory(self._config)
 

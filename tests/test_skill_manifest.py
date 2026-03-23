@@ -23,6 +23,8 @@ def test_skill_manifest_openclaw_contract() -> None:
 
     assert "{baseDir}" in body
     assert "~/.openclaw/skills/predictclaw/" in body
+    assert "only canonical user config root" in body.lower()
+    assert "development-only artifact" in body.lower()
     assert "skills.entries.predictclaw.env" in body
 
 

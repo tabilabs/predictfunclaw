@@ -643,9 +643,17 @@ def test_openclaw_installed_skill_supports_predict_account_overlay_status_via_en
     assert payload["mode"] == "predict-account"
     assert payload["fundingRoute"] == "vault-to-predict-account"
     assert payload["predictAccountAddress"] == PREDICT_ACCOUNT_ADDRESS
+    assert payload["manualTopUpAddress"] == PREDICT_ACCOUNT_ADDRESS
+    assert payload["tradingIdentityAddress"] == PREDICT_ACCOUNT_ADDRESS
     assert payload["predictAccountAddress"] != payload["vaultAddress"]
+    assert payload["manualTopUpAddress"] != payload["vaultAddress"]
+    assert payload["orchestrationVaultAddress"] == VAULT_ADDRESS
+    assert (
+        "vault address is orchestration metadata only"
+        in payload["manualTopUpGuidance"].lower()
+    )
     assert payload["tradeSignerAddress"] != payload["vaultAddress"]
-    assert funding_target["recipient"] == PREDICT_ACCOUNT_ADDRESS
+    assert funding_target["recipient"] == payload["manualTopUpAddress"]
 
 
 def test_openclaw_installed_skill_supports_predict_account_overlay_deposit_via_env_injection(
@@ -665,9 +673,32 @@ def test_openclaw_installed_skill_supports_predict_account_overlay_deposit_via_e
     assert payload["mode"] == "predict-account"
     assert payload["fundingRoute"] == "vault-to-predict-account"
     assert payload["predictAccountAddress"] == PREDICT_ACCOUNT_ADDRESS
+    assert payload["manualTopUpAddress"] == PREDICT_ACCOUNT_ADDRESS
+    assert payload["tradingIdentityAddress"] == PREDICT_ACCOUNT_ADDRESS
     assert payload["predictAccountAddress"] != payload["vaultAddress"]
+    assert payload["manualTopUpAddress"] != payload["vaultAddress"]
+    assert payload["orchestrationVaultAddress"] == VAULT_ADDRESS
+    assert (
+        "vault address is orchestration metadata only"
+        in payload["manualTopUpGuidance"].lower()
+    )
     assert payload["tradeSignerAddress"] != payload["vaultAddress"]
-    assert funding_target["recipient"] == PREDICT_ACCOUNT_ADDRESS
+    assert funding_target["recipient"] == payload["manualTopUpAddress"]
+
+
+def test_openclaw_installed_skill_overlay_deposit_text_separates_manual_top_up_and_vault_metadata(
+    tmp_path: Path,
+) -> None:
+    installed_root = install_openclaw_skill(tmp_path)
+    env = overlay_env(tmp_path, healthy_overlay_mcp_command(tmp_path))
+
+    result = run_installed_predictclaw(installed_root, "wallet", "deposit", env=env)
+
+    assert result.returncode == 0
+    assert f"Manual Top-Up Address: {PREDICT_ACCOUNT_ADDRESS}" in result.stdout
+    assert f"Predict Account Recipient: {PREDICT_ACCOUNT_ADDRESS}" in result.stdout
+    assert f"Orchestration Vault Address: {VAULT_ADDRESS}" in result.stdout
+    assert "Funding " + "Vault Address" not in result.stdout
 
 
 def test_openclaw_installed_skill_supports_predict_account_overlay_buy_via_env_injection(

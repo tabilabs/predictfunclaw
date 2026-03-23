@@ -40,7 +40,7 @@ class PredictAuthenticator:
         signer = self._config.auth_signer_address
         if signer is None:
             raise ConfigError(
-                "Authenticated predict.fun actions require PREDICT_PRIVATE_KEY or the Predict Account credential pair."
+                "Authenticated predict.fun actions require PREDICT_EOA_PRIVATE_KEY or the Predict Account credential pair."
             )
 
         cache_key = f"{self._config.env.value}:{signer}"
@@ -56,7 +56,7 @@ class PredictAuthenticator:
     def build_auth_request(self, message: str) -> AuthRequest:
         if self._config.wallet_mode == WalletMode.EOA:
             if not self._config.private_key_value:
-                raise ConfigError("EOA mode requires PREDICT_PRIVATE_KEY.")
+                raise ConfigError("EOA mode requires PREDICT_EOA_PRIVATE_KEY.")
             signer = self._account_from_key(self._config.private_key_value)
             signed = signer.sign_message(encode_defunct(text=message))
             return AuthRequest(
@@ -80,7 +80,7 @@ class PredictAuthenticator:
             )
 
         raise ConfigError(
-            "Authenticated predict.fun actions require PREDICT_PRIVATE_KEY or the Predict Account credential pair."
+            "Authenticated predict.fun actions require PREDICT_EOA_PRIVATE_KEY or the Predict Account credential pair."
         )
 
 

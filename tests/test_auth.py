@@ -42,7 +42,7 @@ async def test_get_jwt_for_eoa_and_predict_account(tmp_path) -> None:
         {
             "PREDICT_ENV": "testnet",
             "PREDICT_STORAGE_DIR": str(tmp_path),
-            "PREDICT_PRIVATE_KEY": private_key,
+            "PREDICT_EOA_PRIVATE_KEY": private_key,
         }
     )
     authenticator = PredictAuthenticator(eoa_config, api_client)

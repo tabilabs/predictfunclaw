@@ -170,10 +170,14 @@ class FakeOverlayOrchestration:
         return {
             "fundingRoute": self.funding_route,
             "predictAccountAddress": self.predict_account_address,
+            "manualTopUpAddress": self.predict_account_address,
+            "tradingIdentityAddress": self.predict_account_address,
             "tradeSignerAddress": self.trade_signer_address,
             "vaultAddress": self.vault_address,
+            "orchestrationVaultAddress": self.vault_address,
             "vaultAddressSource": self.vault_address_source,
             "vaultExists": self.vault_exists,
+            "manualTopUpGuidance": "Send supported assets to the Predict Account address for manual top-ups; the vault address is orchestration metadata only.",
             "accountContext": self.account_context or {"agentId": "agent"},
             "fundingPolicy": self.funding_policy or {"policyId": "policy"},
             "fundingTarget": self.funding_target
@@ -313,7 +317,7 @@ async def test_buy_market_order_builds_submits_and_polls_status() -> None:
         {
             "PREDICT_ENV": "testnet",
             "PREDICT_STORAGE_DIR": "/tmp/predict",
-            "PREDICT_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
+            "PREDICT_EOA_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
         }
     )
     api_client = FakeApiClient()
@@ -360,7 +364,7 @@ async def test_trade_rejects_invalid_outcome_before_network_call() -> None:
         {
             "PREDICT_ENV": "testnet",
             "PREDICT_STORAGE_DIR": "/tmp/predict",
-            "PREDICT_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
+            "PREDICT_EOA_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
         }
     )
     api_client = FakeApiClient()
@@ -382,7 +386,7 @@ async def test_buy_uses_onchain_id_when_token_id_missing() -> None:
         {
             "PREDICT_ENV": "testnet",
             "PREDICT_STORAGE_DIR": "/tmp/predict",
-            "PREDICT_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
+            "PREDICT_EOA_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
         }
     )
     api_client = OnChainIdOnlyApiClient()
@@ -405,7 +409,7 @@ async def test_buy_limit_order_does_not_require_orderbook_lookup() -> None:
         {
             "PREDICT_ENV": "testnet",
             "PREDICT_STORAGE_DIR": "/tmp/predict",
-            "PREDICT_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
+            "PREDICT_EOA_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
         }
     )
     api_client = MissingOrderbookApiClient()
@@ -552,6 +556,11 @@ async def test_trade_buy_predict_account_overlay_fails_with_funding_guidance_whe
     assert "vault-to-predict-account" in message
     assert "requiredAmountRaw=23000000000000000000" in message
     assert "currentBalanceRaw=2000000000000000000" in message
+    assert "manualTopUpAddress=0x1234567890123456789012345678901234567890" in message
+    assert (
+        "orchestrationVaultAddress=0x2222222222222222222222222222222222222222"
+        in message
+    )
     assert "nextStepKind=submitFunding" in message
     assert "wallet deposit --json" in message
     assert len(api_client.created_orders) == 0

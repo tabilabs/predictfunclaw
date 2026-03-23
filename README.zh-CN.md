@@ -74,7 +74,7 @@ SKILL frontmatter 的 metadata 里故意只声明通用入口变量：`PREDICT_E
    - `template.readonly.env` -> live 只读市场读取
    - `template.eoa.env` -> 直接私钥交易
    - `template.predict-account.env` -> Predict Account 交易
-   - `template.mandated-vault.env` -> 高级 vault control-plane / overlay
+   - `template.mandated-vault.env` -> 高级 pure vault control-plane bootstrap
 3. 在 `~/.openclaw/skills/predictclaw/` 中把选中的模板复制为 `.env`。
 4. 只填写该模式需要的最小变量集。
 5. 先用 `uv run python scripts/predictclaw.py --help` 确认安装无误。
@@ -84,13 +84,21 @@ SKILL frontmatter 的 metadata 里故意只声明通用入口变量：`PREDICT_E
    - `eoa` / `predict-account` -> `uv run python scripts/predictclaw.py wallet status --json`
    - `mandated-vault` -> `uv run python scripts/predictclaw.py wallet bootstrap-vault --json`
 
+### 先选路线，再填配置
+
+- `read-only` 只用于浏览。
+- 当 Predict Account 继续作为交易身份、Vault 只负责供资时，使用 `predict-account + ERC_MANDATED_*` overlay。
+- 只有在你要创建新 Vault，或直接操作 Vault control-plane 路径时，才使用 pure `mandated-vault`。
+
+如果你想让 Vault 提供资金、但不改变交易身份，请从 `template.predict-account.env` 开始，使用 `PREDICT_WALLET_MODE=predict-account`；除非你正在创建新 vault，否则不要先从 pure `wallet bootstrap-vault` 开始。
+
 ## 启动模板
 
 - `template.env` -> 最安全的首装入口；使用 `test-fixture` + `read-only`，不需要 secrets，也不会访问网络
 - `template.readonly.env` -> live 市场读取；mainnet 的市场读取需要 PREDICT_API_KEY
 - `template.eoa.env` -> EOA signer 路线，固定走主网 `https://api.predict.fun`
 - `template.predict-account.env` -> Predict Account signer 路线，固定走主网 `https://api.predict.fun`
-- `template.mandated-vault.env` -> 高级显式 opt-in 的 vault control-plane 模板
+- `template.mandated-vault.env` -> 高级显式 opt-in 的 pure vault control-plane 模板
 
 ## 真实首装路径
 
@@ -265,6 +273,8 @@ ERC_MANDATED_CHAIN_ID=56
 
 在 overlay 路线中，Predict Account remains 入金地址与交易身份，而 Vault 通过 MCP 支持的 session / asset-transfer 规划来为 Predict Account 提供资金。
 
+当 Predict Account 继续作为入金/交易身份，而 Vault 只负责供资时，这就是正确路线。
+
 如果你还没有显式的 vault 地址，保留同一组 Predict Account 凭据，并把 `ERC_MANDATED_VAULT_ADDRESS` 改成完整 derivation tuple：`ERC_MANDATED_FACTORY_ADDRESS`、`ERC_MANDATED_VAULT_ASSET_ADDRESS`、`ERC_MANDATED_VAULT_NAME`、`ERC_MANDATED_VAULT_SYMBOL`、`ERC_MANDATED_VAULT_AUTHORITY`、`ERC_MANDATED_VAULT_SALT`。
 
 可选的 overlay 限额：
@@ -298,6 +308,8 @@ PredictClaw 支持四种显式 wallet mode：
 ### pure mandated-vault 边界
 
 `mandated-vault` 是一个高级显式 opt-in 模式，只适合你明确需要 MCP 辅助的 vault control-plane 时使用。
+
+内置 factory 默认值和成功后的 `.env` 回填，只是在 pure bootstrap 场景里提供便利，并不能替代部署时 signer 输入，也不能替代 `predict-account` overlay 所需的专用 env。
 
 对于默认 pure bootstrap 流程，用户只需要提供 EOA signer、部署手续费资金，以及可选的额度控制。PredictClaw 会处理固定 factory、预览、确认和 `.env` 回填。
 

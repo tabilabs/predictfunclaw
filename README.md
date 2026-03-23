@@ -74,7 +74,7 @@ The SKILL frontmatter metadata intentionally lists only the universal entry vari
    - `template.readonly.env` -> live read-only market reads
    - `template.eoa.env` -> direct private-key trading
    - `template.predict-account.env` -> Predict Account trading
-   - `template.mandated-vault.env` -> advanced vault control-plane / overlay
+   - `template.mandated-vault.env` -> advanced pure vault control-plane bootstrap
 3. Copy the chosen template to `.env` inside `~/.openclaw/skills/predictclaw/`.
 4. Fill only the variables required for that mode.
 5. Verify the install with `uv run python scripts/predictclaw.py --help`.
@@ -84,13 +84,21 @@ The SKILL frontmatter metadata intentionally lists only the universal entry vari
    - `eoa` / `predict-account` -> `uv run python scripts/predictclaw.py wallet status --json`
    - `mandated-vault` -> `uv run python scripts/predictclaw.py wallet bootstrap-vault --json`
 
+### Choose your route first
+
+- `read-only` for browsing only.
+- `predict-account + ERC_MANDATED_*` overlay when Predict Account remains the trading identity and Vault only funds it.
+- pure `mandated-vault` when creating a new Vault or directly operating the Vault control-plane path.
+
+If you want Vault funding without changing the trading identity, start from `template.predict-account.env`, use `PREDICT_WALLET_MODE=predict-account`, and do not start from pure `wallet bootstrap-vault` unless you are creating a new vault.
+
 ## Bootstrap templates
 
 - `template.env` -> safest first install; uses `test-fixture` + `read-only` so the CLI can start without secrets or network access
 - `template.readonly.env` -> live market reads; mainnet market reads require PREDICT_API_KEY
 - `template.eoa.env` -> EOA signer flow, pinned to mainnet with `https://api.predict.fun`
 - `template.predict-account.env` -> Predict Account signer flow, pinned to mainnet with `https://api.predict.fun`
-- `template.mandated-vault.env` -> advanced explicit opt-in template for vault control-plane usage
+- `template.mandated-vault.env` -> advanced explicit opt-in template for pure vault control-plane usage
 
 ## Real first-install paths
 
@@ -275,6 +283,8 @@ ERC_MANDATED_FUNDING_WINDOW_SECONDS=3600
 
 In the overlay route, Predict Account remains the deposit/trading account while Vault funds the Predict Account through MCP-backed session and asset-transfer planning.
 
+This is the correct route when Predict Account remains the deposit/trading identity and Vault only supplies funds.
+
 ## Wallet Modes
 
 PredictClaw supports four explicit wallet modes:
@@ -296,6 +306,8 @@ This route exposes `vault-to-predict-account` semantics in `wallet status --json
 ### Pure mandated-vault boundaries
 
 `mandated-vault` is an advanced explicit opt-in mode. Only enable it when you intentionally want MCP-assisted vault control-plane behavior.
+
+Bundled factory defaults and post-success `.env` backfill make pure bootstrap more convenient, but they do not replace deployment-time signer inputs or the overlay-specific env required by the `predict-account` funding route.
 
 For the default pure bootstrap flow, users only need an EOA signer, deployment-fee funding, and any optional amount caps. PredictClaw handles the product-configured factory, previews before broadcast, requires explicit confirmation, and backfills `.env` after success.
 

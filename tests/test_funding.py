@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any, cast
 
 import lib
@@ -584,7 +585,9 @@ def test_wallet_deposit_mandated_vault_returns_confirmable_preview_when_undeploy
     )
 
     payload = service.get_deposit_details().to_dict()
+    permission_summary = cast(dict[str, Any], payload["permissionSummary"])
     preview = cast(dict[str, Any], payload["bootstrapPreview"])
+    permission_summary = cast(dict[str, Any], payload["permissionSummary"])
     tx_summary = cast(dict[str, Any], preview["txSummary"])
 
     assert payload["mode"] == "mandated-vault"
@@ -594,6 +597,13 @@ def test_wallet_deposit_mandated_vault_returns_confirmable_preview_when_undeploy
     assert payload["createVaultPreparation"] is None
     assert preview["confirmationRequired"] is True
     assert preview["predictedVault"] == payload["fundingAddress"]
+    assert permission_summary["permissionModel"] == "mandated-vault-v1"
+    assert permission_summary["vaultAuthority"] == config.mandated_vault_authority
+    assert permission_summary["vaultExecutor"] == config.mandated_executor_address
+    assert (
+        permission_summary["bootstrapSigner"]
+        == config.mandated_bootstrap_signer_address
+    )
     assert tx_summary["from"] == "0x5555555555555555555555555555555555555555"
     assert tx_summary["to"] == "0x1111111111111111111111111111111111111111"
     assert tx_summary["data"] == "0xfeedbeef"
@@ -613,12 +623,14 @@ def test_wallet_deposit_mandated_vault_prefers_bootstrap_plan_when_available() -
     service = FundingService(config, bridge_factory=lambda _config: bridge)
 
     payload = service.get_deposit_details().to_dict()
+    permission_summary = cast(dict[str, Any], payload["permissionSummary"])
     preview = cast(dict[str, Any], payload["bootstrapPreview"])
 
     assert payload["vaultExists"] is False
     assert preview["factory"] == "0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6"
     assert preview["confirmationRequired"] is True
     assert preview["signerAddress"] == config.mandated_vault_authority
+    assert permission_summary["permissionModel"] == "mandated-vault-v1"
     assert bridge.bootstrap_calls == 1
     assert bridge.bootstrap_modes == ["plan"]
     assert bridge.predict_calls == 0
@@ -737,6 +749,7 @@ def test_wallet_deposit_predict_account_with_vault_overlay_exposes_route_and_pla
 
     payload = service.get_deposit_details().to_dict()
     orchestration = cast(dict[str, Any], payload["fundingOrchestration"])
+    permission_summary = cast(dict[str, Any], payload["permissionSummary"])
     account_context = cast(dict[str, Any], orchestration["accountContext"])
     funding_policy = cast(dict[str, Any], orchestration["fundingPolicy"])
     funding_target = cast(dict[str, Any], orchestration["fundingTarget"])
@@ -754,6 +767,11 @@ def test_wallet_deposit_predict_account_with_vault_overlay_exposes_route_and_pla
     assert payload["vaultAddress"] == "0x2222222222222222222222222222222222222222"
     assert payload["vaultAddressSource"] == "explicit"
     assert payload["vaultExists"] is True
+    assert permission_summary["permissionModel"] == "vault-to-predict-account-overlay"
+    assert permission_summary["allowedTokenAddresses"] == [
+        config.mandated_vault_asset_address
+    ]
+    assert permission_summary["allowedRecipients"] == [payload["predictAccountAddress"]]
     assert account_context["executor"] == "0x5555555555555555555555555555555555555555"
     assert (
         account_context["defaults"]["allowedAdaptersRoot"]
@@ -880,3 +898,179 @@ def test_wallet_deposit_predict_account_overlay_computes_dynamic_adapter_root() 
 
     assert account_context["defaults"]["allowedAdaptersRoot"] == expected_root
     assert funding_plan["fundingContext"]["allowedAdaptersRoot"] == expected_root
+
+
+def test_preview_vault_redeem_reports_structured_blocker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = PredictConfig.from_env(
+        {
+            "PREDICT_ENV": "mainnet",
+            "PREDICT_STORAGE_DIR": "/tmp/predict",
+            "PREDICT_WALLET_MODE": "mandated-vault",
+            "PREDICT_API_KEY": "test-api-key",
+            "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+            "ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY": "0x8f2a559490d0123eb5eb0f5d8d8c441f6df5e0a8fba4b4c8fdd0f760b6f6f4a2",
+        }
+    )
+
+    class _Call:
+        def __init__(self, value: Any = None, error: Exception | None = None) -> None:
+            self._value = value
+            self._error = error
+
+        def call(self, *_args: Any, **_kwargs: Any) -> Any:
+            if self._error is not None:
+                raise self._error
+            return self._value
+
+    class _Functions:
+        def name(self) -> _Call:
+            return _Call("Predict Mainnet USDT Vault")
+
+        def symbol(self) -> _Call:
+            return _Call("pmUSDT")
+
+        def decimals(self) -> _Call:
+            return _Call(18)
+
+        def balanceOf(self, _holder: str) -> _Call:
+            return _Call(28_990_000_000_000_000_000)
+
+        def asset(self) -> _Call:
+            return _Call("0x55d398326f99059fF775485246999027B3197955")
+
+        def totalAssets(self) -> _Call:
+            return _Call(23_990_000_000_000_000_000)
+
+        def maxRedeem(self, _holder: str) -> _Call:
+            return _Call(28_990_000_000_000_000_000)
+
+        def maxWithdraw(self, _holder: str) -> _Call:
+            return _Call(None)
+
+        def previewRedeem(self, _shares: int) -> _Call:
+            return _Call(23_990_000_000_000_000_000)
+
+        def redeem(self, _shares: int, _receiver: str, _owner: str) -> _Call:
+            return _Call(
+                error=Exception(
+                    "0xb94abeec0000000000000000000000007df0ba782d85b93266b595d496088abfac82395000000000000000000000000000000000000000000000000192512b678693000000000000000000000000000000000000000000000000000000000000000000"
+                )
+            )
+
+    class _Eth:
+        def contract(self, *_args: Any, **_kwargs: Any) -> Any:
+            return SimpleNamespace(functions=_Functions())
+
+    class _FakeWeb3:
+        HTTPProvider = staticmethod(lambda *_args, **_kwargs: object())
+
+        def __init__(self, _provider: object) -> None:
+            self.eth = _Eth()
+
+        @staticmethod
+        def to_checksum_address(address: str) -> str:
+            return Web3.to_checksum_address(address)
+
+    monkeypatch.setattr(lib.funding_service, "Web3", _FakeWeb3)
+
+    preview = FundingService(config).preview_vault_redeem(
+        share_token="0x4a88c1c95d0f59ee87c3286ed23e9dcdf4cf08d7",
+        holder="0x7df0ba782D85B93266b595d496088ABFAc823950",
+        redeem_all=True,
+    )
+    payload = preview.to_dict()
+
+    assert payload["shareToken"] == Web3.to_checksum_address(
+        "0x4a88c1c95d0f59ee87c3286ed23e9dcdf4cf08d7"
+    )
+    assert payload["holder"] == "0x7df0ba782D85B93266b595d496088ABFAc823950"
+    assert payload["shareTokenMetadata"]["symbol"] == "pmUSDT"
+    assert (
+        payload["underlyingAsset"]["address"]
+        == "0x55d398326f99059fF775485246999027B3197955"
+    )
+    assert payload["redeemableNow"] is False
+    assert payload["blockingReason"] == "erc4626-max-redeem-blocked"
+    assert payload["contractError"]["code"] == "ERC4626ExceededMaxRedeem"
+    assert payload["holderRoleMatches"]["bootstrapSigner"] is False
+
+
+def test_preview_vault_redeem_can_report_redeemable_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = PredictConfig.from_env(
+        {
+            "PREDICT_ENV": "mainnet",
+            "PREDICT_STORAGE_DIR": "/tmp/predict",
+            "PREDICT_WALLET_MODE": "mandated-vault",
+            "PREDICT_API_KEY": "test-api-key",
+            "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+        }
+    )
+
+    class _Call:
+        def __init__(self, value: Any = None) -> None:
+            self._value = value
+
+        def call(self, *_args: Any, **_kwargs: Any) -> Any:
+            return self._value
+
+    class _Functions:
+        def name(self) -> _Call:
+            return _Call("Predict Mainnet USDT Vault")
+
+        def symbol(self) -> _Call:
+            return _Call("pmUSDT")
+
+        def decimals(self) -> _Call:
+            return _Call(18)
+
+        def balanceOf(self, _holder: str) -> _Call:
+            return _Call(1_000_000_000_000_000_000)
+
+        def asset(self) -> _Call:
+            return _Call("0x55d398326f99059fF775485246999027B3197955")
+
+        def totalAssets(self) -> _Call:
+            return _Call(1_000_000_000_000_000_000)
+
+        def maxRedeem(self, _holder: str) -> _Call:
+            return _Call(1_000_000_000_000_000_000)
+
+        def maxWithdraw(self, _holder: str) -> _Call:
+            return _Call(1_000_000_000_000_000_000)
+
+        def previewRedeem(self, _shares: int) -> _Call:
+            return _Call(900_000_000_000_000_000)
+
+        def redeem(self, _shares: int, _receiver: str, _owner: str) -> _Call:
+            return _Call(900_000_000_000_000_000)
+
+    class _Eth:
+        def contract(self, *_args: Any, **_kwargs: Any) -> Any:
+            return SimpleNamespace(functions=_Functions())
+
+    class _FakeWeb3:
+        HTTPProvider = staticmethod(lambda *_args, **_kwargs: object())
+
+        def __init__(self, _provider: object) -> None:
+            self.eth = _Eth()
+
+        @staticmethod
+        def to_checksum_address(address: str) -> str:
+            return Web3.to_checksum_address(address)
+
+    monkeypatch.setattr(lib.funding_service, "Web3", _FakeWeb3)
+
+    preview = FundingService(config).preview_vault_redeem(
+        share_token="0x4a88c1c95d0f59ee87c3286ed23e9dcdf4cf08d7",
+        holder=config.mandated_bootstrap_signer_address,
+        redeem_all=True,
+    )
+    payload = preview.to_dict()
+
+    assert payload["redeemableNow"] is True
+    assert payload.get("blockingReason") is None
+    assert payload.get("contractError") is None

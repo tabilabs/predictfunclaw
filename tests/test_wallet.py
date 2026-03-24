@@ -472,7 +472,7 @@ def test_wallet_status_reports_mode_balances_and_approvals() -> None:
         {
             "PREDICT_ENV": "testnet",
             "PREDICT_STORAGE_DIR": "/tmp/predict",
-            "PREDICT_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
+            "PREDICT_EOA_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
         }
     )
     manager = WalletManager(config, sdk_factory=lambda _config: FakeWalletSdk())
@@ -513,7 +513,7 @@ def test_wallet_approve_runs_regular_and_yield_branches() -> None:
         {
             "PREDICT_ENV": "testnet",
             "PREDICT_STORAGE_DIR": "/tmp/predict",
-            "PREDICT_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
+            "PREDICT_EOA_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
         }
     )
     calls: list[str] = []
@@ -588,7 +588,7 @@ def test_wallet_status_mandated_vault_predicts_address_when_not_explicit() -> No
             "PREDICT_ENV": "testnet",
             "PREDICT_STORAGE_DIR": "/tmp/predict",
             "PREDICT_WALLET_MODE": "mandated-vault",
-            "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+            "PREDICT_EOA_PRIVATE_KEY": EOA_PRIVATE_KEY,
         }
     )
     bridge = FakeMandatedBridge(
@@ -642,7 +642,7 @@ def test_wallet_bootstrap_executes_and_returns_backfill_ready_payload() -> None:
             "PREDICT_ENV": "testnet",
             "PREDICT_STORAGE_DIR": "/tmp/predict",
             "PREDICT_WALLET_MODE": "mandated-vault",
-            "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+            "PREDICT_EOA_PRIVATE_KEY": EOA_PRIVATE_KEY,
         }
     )
     bridge = FakeMandatedBridge()
@@ -670,7 +670,7 @@ def test_wallet_bootstrap_confirm_bridges_execute_only_env_requirements() -> Non
             "PREDICT_ENV": "testnet",
             "PREDICT_STORAGE_DIR": "/tmp/predict",
             "PREDICT_WALLET_MODE": "mandated-vault",
-            "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+            "PREDICT_EOA_PRIVATE_KEY": EOA_PRIVATE_KEY,
         }
     )
     bridge = FakeMandatedBridge()
@@ -697,7 +697,7 @@ def test_wallet_status_preview_uses_bootstrap_signer_when_override_is_set() -> N
             "PREDICT_ENV": "testnet",
             "PREDICT_STORAGE_DIR": "/tmp/predict",
             "PREDICT_WALLET_MODE": "mandated-vault",
-            "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+            "PREDICT_EOA_PRIVATE_KEY": EOA_PRIVATE_KEY,
             "ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY": bootstrap_key,
         }
     )
@@ -721,7 +721,7 @@ def test_wallet_bootstrap_confirm_uses_bootstrap_signer_for_execute_path() -> No
             "PREDICT_ENV": "testnet",
             "PREDICT_STORAGE_DIR": "/tmp/predict",
             "PREDICT_WALLET_MODE": "mandated-vault",
-            "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+            "PREDICT_EOA_PRIVATE_KEY": EOA_PRIVATE_KEY,
             "ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY": bootstrap_key,
         }
     )

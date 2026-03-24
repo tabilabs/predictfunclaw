@@ -234,7 +234,7 @@ class PredictSdkWallet:
         self._config = config
         if config.wallet_mode == WalletMode.READ_ONLY:
             raise ConfigError(
-                "Wallet actions require PREDICT_PRIVATE_KEY or Predict Account credentials."
+                "Wallet actions require PREDICT_EOA_PRIVATE_KEY or Predict Account credentials."
             )
 
         if config.wallet_mode == WalletMode.PREDICT_ACCOUNT:
@@ -384,7 +384,7 @@ class FixtureWalletSdk:
         self._config = config
         if config.wallet_mode == WalletMode.READ_ONLY:
             raise ConfigError(
-                "Wallet actions require PREDICT_PRIVATE_KEY or Predict Account credentials."
+                "Wallet actions require PREDICT_EOA_PRIVATE_KEY or Predict Account credentials."
             )
 
     @property
@@ -490,6 +490,12 @@ class WalletStatusSnapshot:
                     "fundingOrchestration": self.funding_orchestration,
                 }
             )
+            payload.update(
+                _overlay_address_guidance_payload(
+                    predict_account_address=self.predict_account_address,
+                    vault_address=self.vault_address,
+                )
+            )
         if self.permission_summary is not None:
             payload["permissionSummary"] = self.permission_summary
         return payload
@@ -550,7 +556,7 @@ class VaultToPredictAccountFundingOrchestration:
     funding_next_step: dict[str, Any]
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        payload = {
             "fundingRoute": self.funding_route,
             "predictAccountAddress": self.predict_account_address,
             "tradeSignerAddress": self.trade_signer_address,
@@ -564,6 +570,13 @@ class VaultToPredictAccountFundingOrchestration:
             "fundingSession": self.funding_session,
             "fundingNextStep": self.funding_next_step,
         }
+        payload.update(
+            _overlay_address_guidance_payload(
+                predict_account_address=self.predict_account_address,
+                vault_address=self.vault_address,
+            )
+        )
+        return payload
 
 
 @dataclass
@@ -687,6 +700,22 @@ class MandatedWalletStatusSnapshot:
         if self.permission_summary is not None:
             payload["permissionSummary"] = self.permission_summary.to_dict()
         return payload
+
+
+def _overlay_address_guidance_payload(
+    *,
+    predict_account_address: str | None,
+    vault_address: str | None,
+) -> dict[str, object]:
+    return {
+        "manualTopUpAddress": predict_account_address,
+        "manualTopUpGuidance": (
+            "Send supported assets to the Predict Account address for manual top-ups; "
+            "the vault address is orchestration metadata only."
+        ),
+        "tradingIdentityAddress": predict_account_address,
+        "orchestrationVaultAddress": vault_address,
+    }
 
 
 def has_mandated_vault_derivation(config: PredictConfig) -> bool:
@@ -1384,7 +1413,7 @@ class WalletManager:
     def _require_sdk(self) -> WalletSdkProtocol:
         if self._config.auth_signer_address is None:
             raise ConfigError(
-                "Wallet actions require signer configuration. Set PREDICT_PRIVATE_KEY or both PREDICT_ACCOUNT_ADDRESS and PREDICT_PRIVY_PRIVATE_KEY."
+                "Wallet actions require signer configuration. Set PREDICT_EOA_PRIVATE_KEY or both PREDICT_ACCOUNT_ADDRESS and PREDICT_PRIVY_PRIVATE_KEY."
             )
         return self._sdk_factory(self._config)
 

@@ -177,7 +177,7 @@ class PredictConfig(BaseModel):
 
             if has_eoa and has_predict_account_credentials:
                 raise ValueError(
-                    "Use either PREDICT_PRIVATE_KEY for EOA mode or the Predict Account pair, not both."
+                    "Use either PREDICT_EOA_PRIVATE_KEY for EOA mode or the Predict Account pair, not both."
                 )
 
             return self
@@ -195,7 +195,7 @@ class PredictConfig(BaseModel):
 
         if self.wallet_mode_override == WalletMode.EOA:
             if not has_eoa:
-                raise ValueError("EOA mode requires PREDICT_PRIVATE_KEY.")
+                raise ValueError("EOA mode requires PREDICT_EOA_PRIVATE_KEY.")
             if has_predict_account_credentials or self.has_mandated_config_input:
                 raise ValueError(
                     "EOA mode does not allow Predict Account or mandated-vault configuration."
@@ -222,7 +222,7 @@ class PredictConfig(BaseModel):
             )
         if has_any_mandated_derivation and not has_all_mandated_derivation:
             raise ValueError(
-                "mandated-vault mode requires PREDICT_PRIVATE_KEY, ERC_MANDATED_VAULT_ADDRESS, or full derivation inputs."
+                "mandated-vault mode requires PREDICT_EOA_PRIVATE_KEY, ERC_MANDATED_VAULT_ADDRESS, or full derivation inputs."
             )
         if (
             not has_bootstrap_signer
@@ -230,7 +230,7 @@ class PredictConfig(BaseModel):
             and not has_all_mandated_derivation
         ):
             raise ValueError(
-                "mandated-vault mode requires PREDICT_PRIVATE_KEY, ERC_MANDATED_VAULT_ADDRESS, or full derivation inputs."
+                "mandated-vault mode requires PREDICT_EOA_PRIVATE_KEY, ERC_MANDATED_VAULT_ADDRESS, or full derivation inputs."
             )
 
         return self
@@ -313,7 +313,7 @@ class PredictConfig(BaseModel):
         source = env or os.environ
         runtime_env = RuntimeEnv(source.get("PREDICT_ENV", RuntimeEnv.MAINNET.value))
         wallet_mode_override = _wallet_mode_or_none(source.get("PREDICT_WALLET_MODE"))
-        private_key = _secret_or_none(source.get("PREDICT_PRIVATE_KEY"))
+        private_key = _secret_or_none(source.get("PREDICT_EOA_PRIVATE_KEY"))
         mandated_chain_id = _int_or_none(source.get("ERC_MANDATED_CHAIN_ID"))
         mandated_vault_address = _value_or_none(
             source.get("ERC_MANDATED_VAULT_ADDRESS")
@@ -439,7 +439,7 @@ class PredictConfig(BaseModel):
                     str(error),
                     [
                         source.get("PREDICT_API_KEY"),
-                        source.get("PREDICT_PRIVATE_KEY"),
+                        source.get("PREDICT_EOA_PRIVATE_KEY"),
                         source.get("PREDICT_PRIVY_PRIVATE_KEY"),
                         source.get("ERC_MANDATED_AUTHORITY_PRIVATE_KEY"),
                         source.get("ERC_MANDATED_EXECUTOR_PRIVATE_KEY"),

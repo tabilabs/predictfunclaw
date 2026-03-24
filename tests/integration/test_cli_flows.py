@@ -38,7 +38,7 @@ def fixture_env(tmp_path: Path) -> dict[str, str]:
     return {
         "PREDICT_ENV": "test-fixture",
         "PREDICT_STORAGE_DIR": str(tmp_path),
-        "PREDICT_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
+        "PREDICT_EOA_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
     }
 
 

@@ -202,7 +202,9 @@ class TradeService:
         )
         signed_order = builder.sign_typed_data_order(typed_data)
         signed_order_payload = asdict(signed_order)
-        if not signed_order_payload.get("hash") and hasattr(builder, "build_typed_data_hash"):
+        if not signed_order_payload.get("hash") and hasattr(
+            builder, "build_typed_data_hash"
+        ):
             signed_order_payload["hash"] = builder.build_typed_data_hash(typed_data)
         created = await api_client.create_order(
             {
@@ -218,7 +220,9 @@ class TradeService:
             }
         )
 
-        order_hash = created.hash or signed_order_payload.get("hash") or signed_order.hash or ""
+        order_hash = (
+            created.hash or signed_order_payload.get("hash") or signed_order.hash or ""
+        )
         polled = created
         if order_hash:
             for _ in range(15):
@@ -454,6 +458,10 @@ def _format_overlay_funding_required_error(
             payload.get("predictAccountAddress", "unknown"),
         )
     )
+    manual_top_up_address = str(payload.get("manualTopUpAddress", recipient))
+    orchestration_vault_address = str(
+        payload.get("orchestrationVaultAddress", payload.get("vaultAddress", "unknown"))
+    )
     next_step = payload.get("fundingNextStep", {})
     if not isinstance(next_step, dict):
         next_step = {}
@@ -466,6 +474,8 @@ def _format_overlay_funding_required_error(
         "buy: funding-required for predict-account overlay. "
         f"attemptedBuyAmountRaw={attempted_buy_amount_raw} "
         f"route={route} recipient={recipient} "
+        f"manualTopUpAddress={manual_top_up_address} "
+        f"orchestrationVaultAddress={orchestration_vault_address} "
         f"requiredAmountRaw={required} currentBalanceRaw={current} "
         f"nextStepKind={next_step_kind} "
         f"sessionStatus={session_status} currentStep={current_step} "

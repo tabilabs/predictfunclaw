@@ -17,7 +17,7 @@ def make_config(**overrides: str) -> PredictConfig:
     env = {
         "PREDICT_ENV": "testnet",
         "PREDICT_STORAGE_DIR": "/tmp/predict",
-        "PREDICT_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
+        "PREDICT_EOA_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
     }
     env.update(overrides)
     return PredictConfig.from_env(env)

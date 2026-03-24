@@ -13,6 +13,7 @@ from lib.config import (
 
 
 EOA_PRIVATE_KEY = "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01"
+LEGACY_EOA_ENV = "PREDICT_" + "PRIVATE_KEY"
 PREDICT_ACCOUNT_ADDRESS = "0x1234567890123456789012345678901234567890"
 PREDICT_PRIVY_PRIVATE_KEY = (
     "0x8b3a350cf5c34c9194ca0f4e664f9f47d8f8be06d87564ce4b64f59b8d66c1f0"
@@ -44,7 +45,7 @@ def test_mainnet_requires_api_key() -> None:
             {
                 **base_env(),
                 "PREDICT_ENV": "mainnet",
-                "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+                "PREDICT_EOA_PRIVATE_KEY": EOA_PRIVATE_KEY,
             }
         )
 
@@ -58,7 +59,7 @@ def test_unset_env_defaults_to_mainnet_api_base_url_and_chain() -> None:
         {
             "PREDICT_STORAGE_DIR": "/tmp/predict",
             "PREDICT_API_KEY": "test-api-key",
-            "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+            "PREDICT_EOA_PRIVATE_KEY": EOA_PRIVATE_KEY,
         }
     )
 
@@ -71,7 +72,7 @@ def test_testnet_eoa_configuration_uses_bnb_testnet() -> None:
     config = PredictConfig.from_env(
         {
             **base_env(),
-            "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+            "PREDICT_EOA_PRIVATE_KEY": EOA_PRIVATE_KEY,
         }
     )
 
@@ -81,13 +82,37 @@ def test_testnet_eoa_configuration_uses_bnb_testnet() -> None:
     assert config.api_base_url == "https://api-testnet.predict.fun"
 
 
+def test_legacy_predict_private_key_is_rejected_in_eoa_mode() -> None:
+    with pytest.raises(ConfigError, match="EOA mode requires PREDICT_EOA_PRIVATE_KEY"):
+        PredictConfig.from_env(
+            {
+                **base_env(),
+                "PREDICT_WALLET_MODE": "eoa",
+                LEGACY_EOA_ENV: EOA_PRIVATE_KEY,
+            }
+        )
+
+
+def test_eoa_error_messages_only_reference_predict_eoa_private_key() -> None:
+    with pytest.raises(ConfigError) as error:
+        PredictConfig.from_env(
+            {
+                **base_env(),
+                "PREDICT_WALLET_MODE": "eoa",
+            }
+        )
+
+    assert "PREDICT_EOA_PRIVATE_KEY" in str(error.value)
+    assert LEGACY_EOA_ENV not in str(error.value)
+
+
 def test_mainnet_defaults_to_mainnet_api_base_url() -> None:
     config = PredictConfig.from_env(
         {
             **base_env(),
             "PREDICT_ENV": "mainnet",
             "PREDICT_API_KEY": "test-api-key",
-            "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+            "PREDICT_EOA_PRIVATE_KEY": EOA_PRIVATE_KEY,
         }
     )
 
@@ -123,7 +148,7 @@ def test_predict_account_mode_requires_both_fields() -> None:
     ("wallet_mode", "extra_env", "expected_mode"),
     [
         ("read-only", {}, WalletMode.READ_ONLY),
-        ("eoa", {"PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY}, WalletMode.EOA),
+        ("eoa", {"PREDICT_EOA_PRIVATE_KEY": EOA_PRIVATE_KEY}, WalletMode.EOA),
         (
             "predict-account",
             {
@@ -308,7 +333,7 @@ def test_dedicated_bootstrap_private_key_overrides_other_signer_fallbacks() -> N
         {
             **base_env(),
             "PREDICT_WALLET_MODE": "mandated-vault",
-            "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+            "PREDICT_EOA_PRIVATE_KEY": EOA_PRIVATE_KEY,
             "ERC_MANDATED_AUTHORITY_PRIVATE_KEY": MANDATED_AUTHORITY_PRIVATE_KEY,
             "ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY": MANDATED_BOOTSTRAP_PRIVATE_KEY,
         }
@@ -343,7 +368,7 @@ def test_mandated_vault_bootstrap_accepts_eoa_signer_with_product_defaults() -> 
         {
             **base_env(),
             "PREDICT_WALLET_MODE": "mandated-vault",
-            "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+            "PREDICT_EOA_PRIVATE_KEY": EOA_PRIVATE_KEY,
         }
     )
 
@@ -381,7 +406,7 @@ def test_explicit_mandated_vault_mode_accepts_full_derivation_inputs() -> None:
 def test_explicit_mandated_vault_mode_requires_address_or_full_derivation() -> None:
     with pytest.raises(
         ConfigError,
-        match="requires PREDICT_PRIVATE_KEY, ERC_MANDATED_VAULT_ADDRESS, or full derivation inputs",
+        match="requires PREDICT_EOA_PRIVATE_KEY, ERC_MANDATED_VAULT_ADDRESS, or full derivation inputs",
     ):
         PredictConfig.from_env(
             {
@@ -445,7 +470,7 @@ def test_mandated_vault_env_does_not_silently_fallback_into_eoa() -> None:
         PredictConfig.from_env(
             {
                 **base_env(),
-                "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+                "PREDICT_EOA_PRIVATE_KEY": EOA_PRIVATE_KEY,
                 "ERC_MANDATED_VAULT_ADDRESS": MANDATED_VAULT_ADDRESS,
             }
         )

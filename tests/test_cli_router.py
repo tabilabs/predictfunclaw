@@ -143,7 +143,7 @@ def test_top_level_help_exposes_planned_command_surface() -> None:
         "setup",
     ]:
         assert command in combined
-    assert "PREDICT_PRIVATE_KEY" in combined
+    assert "PREDICT_EOA_PRIVATE_KEY" in combined
     assert "PREDICT_WALLET_MODE" in combined
     assert "Predict Account" in combined
     assert "testnet" in combined.lower()
@@ -198,7 +198,7 @@ def test_wallet_deposit_help_documents_funding_semantics() -> None:
 
     assert result.returncode == 0
     combined = result.stdout + result.stderr
-    assert "funding address" in combined.lower()
+    assert "funding guidance" in combined.lower()
     assert "predict account" in combined.lower()
     assert "bnb" in combined.lower()
     assert "usdt" in combined.lower()
@@ -235,7 +235,7 @@ def test_wallet_redeem_vault_preview_outputs_structured_json(tmp_path: Path) -> 
         "PREDICT_STORAGE_DIR": "/tmp/predict",
         "PREDICT_WALLET_MODE": "mandated-vault",
         "PREDICT_API_KEY": "test-api-key",
-        "PREDICT_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
+        "PREDICT_EOA_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
         "PYTHONPATH": f"{patch_root}{os.pathsep}" + os.environ.get("PYTHONPATH", ""),
     }
 
@@ -261,7 +261,7 @@ def test_wallet_redeem_vault_confirm_fails_closed_until_supported() -> None:
         "PREDICT_ENV": "mainnet",
         "PREDICT_STORAGE_DIR": "/tmp/predict",
         "PREDICT_WALLET_MODE": "mandated-vault",
-        "PREDICT_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
+        "PREDICT_EOA_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
     }
 
     result = run_wallet(

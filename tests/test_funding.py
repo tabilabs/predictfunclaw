@@ -465,7 +465,7 @@ def test_wallet_deposit_reports_eoa_vs_predict_account_address() -> None:
         {
             "PREDICT_ENV": "testnet",
             "PREDICT_STORAGE_DIR": "/tmp/predict",
-            "PREDICT_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
+            "PREDICT_EOA_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
         }
     )
     eoa_service = FundingService(
@@ -506,7 +506,7 @@ def test_withdraw_rejects_invalid_destination_or_insufficient_balance() -> None:
         {
             "PREDICT_ENV": "testnet",
             "PREDICT_STORAGE_DIR": "/tmp/predict",
-            "PREDICT_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
+            "PREDICT_EOA_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
         }
     )
     calls: list[tuple[str, str, int]] = []
@@ -616,7 +616,7 @@ def test_wallet_deposit_mandated_vault_prefers_bootstrap_plan_when_available() -
             "PREDICT_ENV": "testnet",
             "PREDICT_STORAGE_DIR": "/tmp/predict",
             "PREDICT_WALLET_MODE": "mandated-vault",
-            "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+            "PREDICT_EOA_PRIVATE_KEY": EOA_PRIVATE_KEY,
         }
     )
     bridge = FakeMandatedBridge(deployed=False)
@@ -909,7 +909,7 @@ def test_preview_vault_redeem_reports_structured_blocker(
             "PREDICT_STORAGE_DIR": "/tmp/predict",
             "PREDICT_WALLET_MODE": "mandated-vault",
             "PREDICT_API_KEY": "test-api-key",
-            "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+            "PREDICT_EOA_PRIVATE_KEY": EOA_PRIVATE_KEY,
             "ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY": "0x8f2a559490d0123eb5eb0f5d8d8c441f6df5e0a8fba4b4c8fdd0f760b6f6f4a2",
         }
     )
@@ -1006,7 +1006,7 @@ def test_preview_vault_redeem_can_report_redeemable_state(
             "PREDICT_STORAGE_DIR": "/tmp/predict",
             "PREDICT_WALLET_MODE": "mandated-vault",
             "PREDICT_API_KEY": "test-api-key",
-            "PREDICT_PRIVATE_KEY": EOA_PRIVATE_KEY,
+            "PREDICT_EOA_PRIVATE_KEY": EOA_PRIVATE_KEY,
         }
     )
 

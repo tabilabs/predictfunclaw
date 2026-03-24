@@ -1,3 +1,7 @@
+.git/
+.venv/
+.pytest_cache/
+.env
 artifacts/
 dist/
 tests/

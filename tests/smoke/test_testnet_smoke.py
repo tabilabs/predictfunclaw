@@ -22,7 +22,7 @@ def _smoke_env_or_skip() -> dict[str, str]:
         "PREDICT_ENV": smoke_env,
         "PREDICT_STORAGE_DIR": os.getenv("PREDICT_STORAGE_DIR", "/tmp/predict-smoke"),
         "PREDICT_API_KEY": os.getenv("PREDICT_SMOKE_API_KEY", ""),
-        "PREDICT_PRIVATE_KEY": os.getenv("PREDICT_SMOKE_PRIVATE_KEY", ""),
+        "PREDICT_EOA_PRIVATE_KEY": os.getenv("PREDICT_SMOKE_PRIVATE_KEY", ""),
         "PREDICT_ACCOUNT_ADDRESS": os.getenv("PREDICT_SMOKE_ACCOUNT_ADDRESS", ""),
         "PREDICT_PRIVY_PRIVATE_KEY": os.getenv("PREDICT_SMOKE_PRIVY_PRIVATE_KEY", ""),
         "PREDICT_API_BASE_URL": os.getenv(

@@ -870,7 +870,7 @@ async def test_bridge_passes_execute_only_broadcast_env_to_mcp_process(
     config = PredictConfig.from_env(
         mandated_env(
             command,
-            PREDICT_PRIVATE_KEY=HEX64_A,
+            PREDICT_EOA_PRIVATE_KEY=HEX64_A,
             ERC_MANDATED_ENABLE_BROADCAST="1",
             ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY=HEX64_B,
         )

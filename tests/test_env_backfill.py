@@ -25,7 +25,7 @@ def test_backfill_env_file_updates_bootstrap_env_without_touching_unrelated_valu
             [
                 "PREDICT_ENV=testnet",
                 "PREDICT_WALLET_MODE=mandated-vault",
-                "PREDICT_PRIVATE_KEY=0xbootstrap-signer",
+                "PREDICT_EOA_PRIVATE_KEY=0xbootstrap-signer",
                 "ERC_MANDATED_MCP_COMMAND=erc-mandated-mcp",
                 "OPENROUTER_API_KEY=leave-me-alone",
             ]

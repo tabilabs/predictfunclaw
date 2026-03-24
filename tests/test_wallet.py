@@ -23,6 +23,7 @@ from lib.mandated_mcp_bridge import (
     VaultBootstrapResult,
     VaultHealthCheckResult,
 )
+from lib.session_storage import FundAndActionSessionRecord, SessionStorage
 from lib.wallet_manager import (
     ApprovalSnapshot,
     MANDATED_FUNDING_TRANSFER_MAX_CUMULATIVE_DRAWDOWN_BPS,
@@ -466,6 +467,45 @@ class FakeMandatedBridge:
             },
         }
 
+    async def create_vault_asset_transfer_result(self, **_: Any) -> Any:
+        return {
+            "assetTransferResult": {
+                "status": "confirmed",
+                "txHash": "0x" + "ab" * 32,
+            }
+        }
+
+    async def apply_agent_fund_and_action_session_event(self, **_: Any) -> Any:
+        return {
+            "session": {
+                "sessionId": "session-wallet-overlay",
+                "status": "pendingFollowUp",
+                "currentStep": "followUpAction",
+                "fundAndActionPlan": {
+                    "followUpActionPlan": {
+                        "kind": "predict.createOrder",
+                        "target": "order/123",
+                        "executionMode": "offchain-api",
+                        "summary": "Submit Predict order",
+                    }
+                },
+            }
+        }
+
+    async def create_agent_follow_up_action_result(self, **_: Any) -> Any:
+        return {
+            "followUpActionResult": {
+                "status": "succeeded",
+                "reference": {"type": "orderId", "value": "pred-ord-1"},
+                "plan": {
+                    "kind": "predict.createOrder",
+                    "target": "order/123",
+                    "executionMode": "offchain-api",
+                    "summary": "Submit Predict order",
+                },
+            }
+        }
+
 
 def test_wallet_status_reports_mode_balances_and_approvals() -> None:
     config = PredictConfig.from_env(
@@ -787,6 +827,8 @@ def test_wallet_status_mandated_vault_uses_single_loop_bridge_lifecycle() -> Non
     payload = manager.get_status().to_dict()
 
     assert payload["vaultDeployed"] is True
+    assert payload["activeRoute"] == "vault-control-plane"
+    assert payload["routePurpose"] == "bootstrap-or-direct-vault-ops"
     assert bridge.close_called is True
     assert bridge.connect_loop_id is not None
     assert bridge.close_loop_id is not None
@@ -869,6 +911,8 @@ def test_wallet_status_predict_account_with_vault_overlay_exposes_route_and_role
     funding_task = cast(dict[str, Any], funding_next_step["task"])
 
     assert payload["mode"] == "predict-account"
+    assert payload["activeRoute"] == "vault-to-predict-account"
+    assert payload["routePurpose"] == "predict-account-top-up-and-trading"
     assert payload["fundingRoute"] == "vault-to-predict-account"
     assert (
         payload["predictAccountAddress"] == "0x1234567890123456789012345678901234567890"
@@ -923,6 +967,72 @@ def test_wallet_status_predict_account_with_vault_overlay_exposes_route_and_role
     assert funding_session["sessionId"] == "session-wallet-overlay"
     assert funding_session["currentStep"] == "fundTargetAccount"
     assert funding_task["kind"] == "submitFunding"
+
+
+def test_wallet_status_uses_stored_overlay_session_binding(tmp_path) -> None:
+    config = PredictConfig.from_env(
+        {
+            "PREDICT_ENV": "testnet",
+            "PREDICT_STORAGE_DIR": str(tmp_path),
+            "PREDICT_WALLET_MODE": "predict-account",
+            "PREDICT_ACCOUNT_ADDRESS": "0x1234567890123456789012345678901234567890",
+            "PREDICT_PRIVY_PRIVATE_KEY": EOA_PRIVATE_KEY,
+            "ERC_MANDATED_VAULT_ADDRESS": "0x2222222222222222222222222222222222222222",
+            "ERC_MANDATED_FACTORY_ADDRESS": "0x1111111111111111111111111111111111111111",
+            "ERC_MANDATED_VAULT_ASSET_ADDRESS": "0x4444444444444444444444444444444444444444",
+            "ERC_MANDATED_VAULT_NAME": "Mandated Vault",
+            "ERC_MANDATED_VAULT_SYMBOL": "MVLT",
+            "ERC_MANDATED_VAULT_AUTHORITY": "0x5555555555555555555555555555555555555555",
+            "ERC_MANDATED_VAULT_SALT": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        }
+    )
+    SessionStorage(config.storage_dir).upsert(
+        FundAndActionSessionRecord(
+            session_id="session-wallet-overlay",
+            predict_account_address="0x1234567890123456789012345678901234567890",
+            market_id="123",
+            position_id="pos-123-yes",
+            outcome="YES",
+            order_hash=None,
+            session_scope="specific-trade",
+            funding_plan={"evaluatedAt": "2026-03-24T00:00:00Z"},
+            funding_session={
+                "sessionId": "session-wallet-overlay",
+                "status": "pendingFunding",
+            },
+            funding_next_step={"task": {"kind": "submitFunding"}},
+            created_at="2026-03-24T00:00:00Z",
+            updated_at="2026-03-24T00:00:00Z",
+        )
+    )
+
+    bridge = FakeMandatedBridge(
+        health_result=VaultHealthCheckResult(
+            blockNumber=101,
+            vault="0x2222222222222222222222222222222222222222",
+            mandateAuthority="0x5555555555555555555555555555555555555555",
+            authorityEpoch="7",
+            pendingAuthority="0x0000000000000000000000000000000000000000",
+            nonceThreshold="2",
+            totalAssets="123000000000000000000",
+        )
+    )
+    manager = WalletManager(
+        config,
+        sdk_factory=lambda _config: FakeWalletSdk(
+            wallet_mode=WalletMode.PREDICT_ACCOUNT,
+            wallet_signer_address="0x7777777777777777777777777777777777777777",
+            wallet_funding_address="0x1234567890123456789012345678901234567890",
+        ),
+        bridge_factory=lambda _config: bridge,
+    )
+
+    payload = manager.get_status().to_dict()
+    binding = cast(dict[str, Any], payload["sessionBinding"])
+
+    assert payload["sessionScope"] == "specific-trade"
+    assert binding["sessionId"] == "session-wallet-overlay"
+    assert binding["positionId"] == "pos-123-yes"
 
 
 def test_wallet_status_predict_account_overlay_reads_balances_outside_event_loop() -> (

@@ -42,3 +42,31 @@ def test_storage_writes_atomically_and_round_trips_records(tmp_path) -> None:
     assert temp_path.exists() is False
     assert payload[0]["position_id"] == "pos-1"
     assert storage.get_position("pos-1") is not None
+
+
+def test_storage_upsert_overwrites_existing_position_status(tmp_path) -> None:
+    storage = PositionStorage(tmp_path)
+    position = LocalPosition(
+        position_id="pos-1",
+        market_id="123",
+        question="Example market",
+        outcome_name="YES",
+        token_id="1001",
+        side="BUY",
+        strategy="MARKET",
+        entry_time="2026-03-06T00:00:00+00:00",
+        entry_price=0.5,
+        quantity="1000000000000000000",
+        notional_usdt=1.0,
+        order_hash="0xhash",
+        order_status="OPEN",
+        fill_amount=None,
+        fee_rate_bps=100,
+        status="OPEN",
+    )
+    storage.upsert(position)
+    storage.upsert(LocalPosition(**{**position.to_dict(), "status": "CANCELLED"}))
+
+    stored = storage.get_position("pos-1")
+    assert stored is not None
+    assert stored.status == "CANCELLED"

@@ -8,7 +8,10 @@ import sys
 from pathlib import Path
 from datetime import datetime, timezone
 
+import pytest
+
 from lib.config import PredictConfig
+from lib.models import OrderRecord
 from lib.position_storage import LocalPosition, PositionStorage
 
 positions_service_module = importlib.import_module("lib.positions_service")
@@ -141,3 +144,62 @@ def test_positions_list_tolerates_overlay_funding_metadata_notes(tmp_path) -> No
     tracked = next(item for item in merged if item.position_id == "pos-overlay-123-yes")
     assert tracked.source == "tracked"
     assert tracked.market_id == "123"
+
+
+@pytest.mark.asyncio
+async def test_positions_reconcile_tracked_open_position_to_cancelled_order(
+    tmp_path,
+) -> None:
+    config = PredictConfig.from_env(
+        {
+            "PREDICT_ENV": "test-fixture",
+            "PREDICT_STORAGE_DIR": str(tmp_path),
+        }
+    )
+    now = datetime.now(timezone.utc).isoformat()
+    storage = PositionStorage(config.storage_dir)
+    storage.seed(
+        [
+            LocalPosition(
+                position_id="pos-123-yes",
+                market_id="123",
+                question="Fixture question",
+                outcome_name="YES",
+                token_id="1001",
+                side="BUY",
+                strategy="MARKET",
+                entry_time=now,
+                entry_price=0.002,
+                quantity="1000000000000000000000",
+                notional_usdt=2.0,
+                order_hash="0x10bd3ba7ba17aff4432c60bfb44ba04a8f31ac67fe50554bdac9e672b52a6170",
+                order_status="OPEN",
+                fill_amount=None,
+                fee_rate_bps=200,
+                source="tracked",
+                status="OPEN",
+            )
+        ]
+    )
+    service = PositionsService(config)
+
+    async def _fetch_remote_positions() -> list[object]:
+        return []
+
+    async def _fetch_remote_order(_order_hash: str) -> OrderRecord:
+        return OrderRecord(
+            hash="0x10bd3ba7ba17aff4432c60bfb44ba04a8f31ac67fe50554bdac9e672b52a6170",
+            status="CANCELLED",
+            marketId="123",
+        )
+
+    service._fetch_remote_positions = _fetch_remote_positions  # type: ignore[method-assign]
+    service._fetch_remote_order = _fetch_remote_order  # type: ignore[method-assign]
+
+    merged = await service.list_positions(include_all=True)
+
+    tracked = next(item for item in merged if item.position_id == "pos-123-yes")
+    stored = storage.get_position("pos-123-yes")
+    assert tracked.status == "CANCELLED"
+    assert stored is not None
+    assert stored.status == "CANCELLED"

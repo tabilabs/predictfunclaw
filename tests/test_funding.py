@@ -23,6 +23,7 @@ from lib.mandated_mcp_bridge import (
     VaultBootstrapResult,
     VaultHealthCheckResult,
 )
+from lib.session_storage import FundAndActionSessionRecord, SessionStorage
 from lib.wallet_manager import (
     MANDATED_FUNDING_TRANSFER_MAX_CUMULATIVE_DRAWDOWN_BPS,
     MANDATED_FUNDING_TRANSFER_MAX_DRAWDOWN_BPS,
@@ -459,6 +460,51 @@ class FakeMandatedBridge:
             },
         }
 
+    async def create_vault_asset_transfer_result(self, **_: Any) -> Any:
+        return SimpleNamespace(
+            assetTransferResult=SimpleNamespace(
+                model_dump=lambda by_alias=True: {
+                    "status": "confirmed",
+                    "txHash": "0x" + "ab" * 32,
+                }
+            )
+        )
+
+    async def apply_agent_fund_and_action_session_event(self, **_: Any) -> Any:
+        return SimpleNamespace(
+            session=SimpleNamespace(
+                model_dump=lambda by_alias=True: {
+                    "sessionId": "session-funding-overlay",
+                    "status": "pendingFollowUp",
+                    "currentStep": "followUpAction",
+                    "fundAndActionPlan": {
+                        "followUpActionPlan": {
+                            "kind": "predict.createOrder",
+                            "target": "order/123",
+                            "executionMode": "offchain-api",
+                            "summary": "Submit Predict order",
+                        }
+                    },
+                }
+            )
+        )
+
+    async def create_agent_follow_up_action_result(self, **_: Any) -> Any:
+        return SimpleNamespace(
+            followUpActionResult=SimpleNamespace(
+                model_dump=lambda by_alias=True: {
+                    "status": "succeeded",
+                    "reference": {"type": "orderId", "value": "pred-ord-1"},
+                    "plan": {
+                        "kind": "predict.createOrder",
+                        "target": "order/123",
+                        "executionMode": "offchain-api",
+                        "summary": "Submit Predict order",
+                    },
+                }
+            )
+        )
+
 
 def test_wallet_deposit_reports_eoa_vs_predict_account_address() -> None:
     eoa_config = PredictConfig.from_env(
@@ -556,6 +602,8 @@ def test_wallet_deposit_mandated_vault_reports_explicit_existing_vault() -> None
     payload = service.get_deposit_details().to_dict()
 
     assert payload["mode"] == "mandated-vault"
+    assert payload["activeRoute"] == "vault-control-plane"
+    assert payload["routePurpose"] == "bootstrap-or-direct-vault-ops"
     assert payload["fundingAddress"] == "0x2222222222222222222222222222222222222222"
     assert payload["vaultAddressSource"] == "explicit"
     assert payload["vaultExists"] is True
@@ -759,6 +807,8 @@ def test_wallet_deposit_predict_account_with_vault_overlay_exposes_route_and_pla
     funding_task = cast(dict[str, Any], funding_next_step["task"])
 
     assert payload["mode"] == "predict-account"
+    assert payload["activeRoute"] == "vault-to-predict-account"
+    assert payload["routePurpose"] == "predict-account-top-up-and-trading"
     assert payload["fundingRoute"] == "vault-to-predict-account"
     assert (
         payload["predictAccountAddress"] == "0x1234567890123456789012345678901234567890"
@@ -807,6 +857,311 @@ def test_wallet_deposit_predict_account_with_vault_overlay_exposes_route_and_pla
     assert funding_session["sessionId"] == "session-funding-overlay"
     assert funding_session["currentStep"] == "fundTargetAccount"
     assert funding_task["kind"] == "submitFunding"
+
+
+def test_funding_service_uses_stored_overlay_session_binding(tmp_path) -> None:
+    config = PredictConfig.from_env(
+        {
+            "PREDICT_ENV": "testnet",
+            "PREDICT_STORAGE_DIR": str(tmp_path),
+            "PREDICT_WALLET_MODE": "predict-account",
+            "PREDICT_ACCOUNT_ADDRESS": "0x1234567890123456789012345678901234567890",
+            "PREDICT_PRIVY_PRIVATE_KEY": EOA_PRIVATE_KEY,
+            "ERC_MANDATED_VAULT_ADDRESS": "0x2222222222222222222222222222222222222222",
+            "ERC_MANDATED_FACTORY_ADDRESS": "0x1111111111111111111111111111111111111111",
+            "ERC_MANDATED_VAULT_ASSET_ADDRESS": "0x4444444444444444444444444444444444444444",
+            "ERC_MANDATED_VAULT_NAME": "Mandated Vault",
+            "ERC_MANDATED_VAULT_SYMBOL": "MVLT",
+            "ERC_MANDATED_VAULT_AUTHORITY": "0x5555555555555555555555555555555555555555",
+            "ERC_MANDATED_VAULT_SALT": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        }
+    )
+    SessionStorage(config.storage_dir).upsert(
+        FundAndActionSessionRecord(
+            session_id="session-funding-overlay",
+            predict_account_address="0x1234567890123456789012345678901234567890",
+            market_id="123",
+            position_id="pos-123-yes",
+            outcome="YES",
+            order_hash=None,
+            session_scope="specific-trade",
+            funding_plan={"evaluatedAt": "2026-03-24T00:00:00Z"},
+            funding_session={
+                "sessionId": "session-funding-overlay",
+                "status": "pendingFunding",
+            },
+            funding_next_step={"task": {"kind": "submitFunding"}},
+            created_at="2026-03-24T00:00:00Z",
+            updated_at="2026-03-24T00:00:00Z",
+        )
+    )
+
+    bridge = FakeMandatedBridge(deployed=True)
+    service = FundingService(
+        config,
+        sdk_factory=lambda _config: FakeFundingSdk(
+            mode=WalletMode.PREDICT_ACCOUNT,
+            signer_address="0x7777777777777777777777777777777777777777",
+            funding_address="0x1234567890123456789012345678901234567890",
+            usdt_balance_wei=2_000_000_000_000_000_000,
+        ),
+        bridge_factory=lambda _config: bridge,
+    )
+
+    payload = service.get_deposit_details().to_dict()
+    binding = cast(dict[str, Any], payload["sessionBinding"])
+
+    assert payload["sessionScope"] == "specific-trade"
+    assert binding["sessionId"] == "session-funding-overlay"
+
+
+def test_funding_service_continue_funding_updates_session_and_next_step(
+    tmp_path,
+) -> None:
+    config = PredictConfig.from_env(
+        {
+            "PREDICT_ENV": "testnet",
+            "PREDICT_STORAGE_DIR": str(tmp_path),
+            "PREDICT_WALLET_MODE": "predict-account",
+            "PREDICT_ACCOUNT_ADDRESS": "0x1234567890123456789012345678901234567890",
+            "PREDICT_PRIVY_PRIVATE_KEY": EOA_PRIVATE_KEY,
+            "ERC_MANDATED_VAULT_ADDRESS": "0x2222222222222222222222222222222222222222",
+            "ERC_MANDATED_FACTORY_ADDRESS": "0x1111111111111111111111111111111111111111",
+            "ERC_MANDATED_VAULT_ASSET_ADDRESS": "0x4444444444444444444444444444444444444444",
+            "ERC_MANDATED_VAULT_NAME": "Mandated Vault",
+            "ERC_MANDATED_VAULT_SYMBOL": "MVLT",
+            "ERC_MANDATED_VAULT_AUTHORITY": "0x5555555555555555555555555555555555555555",
+            "ERC_MANDATED_VAULT_SALT": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        }
+    )
+    SessionStorage(config.storage_dir).upsert(
+        FundAndActionSessionRecord(
+            session_id="session-funding-overlay",
+            predict_account_address="0x1234567890123456789012345678901234567890",
+            market_id="123",
+            position_id="pos-123-yes",
+            outcome="YES",
+            order_hash=None,
+            session_scope="specific-trade",
+            funding_plan={
+                "humanReadableSummary": {
+                    "tokenAddress": "0x4444444444444444444444444444444444444444",
+                    "to": "0x1234567890123456789012345678901234567890",
+                    "amountRaw": "1000000000000000000",
+                }
+            },
+            funding_session={
+                "sessionId": "session-funding-overlay",
+                "status": "pendingFunding",
+                "currentStep": "fundTargetAccount",
+                "fundAndActionPlan": {
+                    "followUpActionPlan": {
+                        "kind": "predict.createOrder",
+                        "target": "order/123",
+                        "executionMode": "offchain-api",
+                        "summary": "Submit Predict order",
+                    }
+                },
+            },
+            funding_next_step={
+                "task": {
+                    "kind": "submitFunding",
+                    "fundingPlan": {
+                        "humanReadableSummary": {
+                            "tokenAddress": "0x4444444444444444444444444444444444444444",
+                            "to": "0x1234567890123456789012345678901234567890",
+                            "amountRaw": "1000000000000000000",
+                        }
+                    },
+                }
+            },
+            created_at="2026-03-24T00:00:00Z",
+            updated_at="2026-03-24T00:00:00Z",
+        )
+    )
+
+    class ContinuationBridge:
+        async def connect(self) -> None:
+            return None
+
+        async def close(self) -> None:
+            return None
+
+        async def create_vault_asset_transfer_result(self, **_: Any) -> Any:
+            return SimpleNamespace(
+                assetTransferResult=SimpleNamespace(
+                    model_dump=lambda by_alias=True: {
+                        "status": "confirmed",
+                        "txHash": "0x" + "ab" * 32,
+                    }
+                )
+            )
+
+        async def apply_agent_fund_and_action_session_event(self, **_: Any) -> Any:
+            return SimpleNamespace(
+                session=SimpleNamespace(
+                    model_dump=lambda by_alias=True: {
+                        "sessionId": "session-funding-overlay",
+                        "status": "pendingFollowUp",
+                        "currentStep": "followUpAction",
+                        "fundAndActionPlan": {
+                            "followUpActionPlan": {
+                                "kind": "predict.createOrder",
+                                "target": "order/123",
+                                "executionMode": "offchain-api",
+                                "summary": "Submit Predict order",
+                            }
+                        },
+                    }
+                )
+            )
+
+        async def next_agent_fund_and_action_session_step(self, **_: Any) -> Any:
+            return SimpleNamespace(
+                model_dump=lambda by_alias=True: {
+                    "session": {
+                        "sessionId": "session-funding-overlay",
+                        "status": "pendingFollowUp",
+                        "currentStep": "followUpAction",
+                    },
+                    "task": {
+                        "kind": "submitFollowUp",
+                        "followUpActionPlan": {
+                            "kind": "predict.createOrder",
+                            "target": "order/123",
+                            "executionMode": "offchain-api",
+                            "summary": "Submit Predict order",
+                        },
+                    },
+                }
+            )
+
+    service = FundingService(
+        config,
+        sdk_factory=lambda _config: FakeFundingSdk(mode=WalletMode.PREDICT_ACCOUNT),
+        bridge_factory=lambda _config: ContinuationBridge(),
+    )
+
+    result = service.continue_funding(tx_hash="0x" + "ab" * 32)
+
+    assert result["session"]["status"] == "pendingFollowUp"
+    assert result["nextStep"]["task"]["kind"] == "submitFollowUp"
+    stored = SessionStorage(config.storage_dir).get_active_session(
+        predict_account_address="0x1234567890123456789012345678901234567890"
+    )
+    assert stored is not None
+    assert stored.funding_session["status"] == "pendingFollowUp"
+
+
+def test_funding_service_continue_follow_up_updates_session_to_succeeded(
+    tmp_path,
+) -> None:
+    config = PredictConfig.from_env(
+        {
+            "PREDICT_ENV": "testnet",
+            "PREDICT_STORAGE_DIR": str(tmp_path),
+            "PREDICT_WALLET_MODE": "predict-account",
+            "PREDICT_ACCOUNT_ADDRESS": "0x1234567890123456789012345678901234567890",
+            "PREDICT_PRIVY_PRIVATE_KEY": EOA_PRIVATE_KEY,
+            "ERC_MANDATED_VAULT_ADDRESS": "0x2222222222222222222222222222222222222222",
+            "ERC_MANDATED_FACTORY_ADDRESS": "0x1111111111111111111111111111111111111111",
+            "ERC_MANDATED_VAULT_ASSET_ADDRESS": "0x4444444444444444444444444444444444444444",
+            "ERC_MANDATED_VAULT_NAME": "Mandated Vault",
+            "ERC_MANDATED_VAULT_SYMBOL": "MVLT",
+            "ERC_MANDATED_VAULT_AUTHORITY": "0x5555555555555555555555555555555555555555",
+            "ERC_MANDATED_VAULT_SALT": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        }
+    )
+    SessionStorage(config.storage_dir).upsert(
+        FundAndActionSessionRecord(
+            session_id="session-funding-overlay",
+            predict_account_address="0x1234567890123456789012345678901234567890",
+            market_id="123",
+            position_id="pos-123-yes",
+            outcome="YES",
+            order_hash=None,
+            session_scope="specific-trade",
+            funding_plan={"evaluatedAt": "2026-03-24T00:00:00Z"},
+            funding_session={
+                "sessionId": "session-funding-overlay",
+                "status": "pendingFollowUp",
+                "currentStep": "followUpAction",
+                "fundAndActionPlan": {
+                    "followUpActionPlan": {
+                        "kind": "predict.createOrder",
+                        "target": "order/123",
+                        "executionMode": "offchain-api",
+                        "summary": "Submit Predict order",
+                    }
+                },
+            },
+            funding_next_step={
+                "task": {
+                    "kind": "submitFollowUp",
+                    "followUpActionPlan": {
+                        "kind": "predict.createOrder",
+                        "target": "order/123",
+                        "executionMode": "offchain-api",
+                        "summary": "Submit Predict order",
+                    },
+                }
+            },
+            created_at="2026-03-24T00:00:00Z",
+            updated_at="2026-03-24T00:00:00Z",
+        )
+    )
+
+    class FollowUpBridge:
+        async def connect(self) -> None:
+            return None
+
+        async def close(self) -> None:
+            return None
+
+        async def create_agent_follow_up_action_result(self, **_: Any) -> Any:
+            return SimpleNamespace(
+                followUpActionResult=SimpleNamespace(
+                    model_dump=lambda by_alias=True: {
+                        "status": "succeeded",
+                        "reference": {"type": "orderId", "value": "pred-ord-1"},
+                        "plan": {
+                            "kind": "predict.createOrder",
+                            "target": "order/123",
+                            "executionMode": "offchain-api",
+                            "summary": "Submit Predict order",
+                        },
+                    }
+                )
+            )
+
+        async def apply_agent_fund_and_action_session_event(self, **_: Any) -> Any:
+            return SimpleNamespace(
+                session=SimpleNamespace(
+                    model_dump=lambda by_alias=True: {
+                        "sessionId": "session-funding-overlay",
+                        "status": "succeeded",
+                        "currentStep": "followUpAction",
+                    }
+                )
+            )
+
+    service = FundingService(
+        config,
+        sdk_factory=lambda _config: FakeFundingSdk(mode=WalletMode.PREDICT_ACCOUNT),
+        bridge_factory=lambda _config: FollowUpBridge(),
+    )
+
+    result = service.continue_follow_up(
+        reference_type="orderId",
+        reference_value="pred-ord-1",
+        output={"orderId": "pred-ord-1"},
+    )
+
+    assert result["session"]["status"] == "succeeded"
+    stored = SessionStorage(config.storage_dir).get_active_session(
+        predict_account_address="0x1234567890123456789012345678901234567890"
+    )
+    assert stored is None
 
 
 def test_wallet_deposit_predict_account_overlay_reads_balances_outside_event_loop() -> (

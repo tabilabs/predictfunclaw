@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import os
@@ -25,6 +26,7 @@ def run_predictclaw(*args: str) -> subprocess.CompletedProcess[str]:
 def run_wallet(*args: str, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
     predict_root = get_predict_root()
     command_env = os.environ.copy()
+    command_env["PREDICTCLAW_DISABLE_LOCAL_ENV"] = "1"
     command_env.update(env)
     return subprocess.run(
         [sys.executable, str(predict_root / "scripts" / "wallet.py"), *args],
@@ -204,6 +206,15 @@ def test_wallet_deposit_help_documents_funding_semantics() -> None:
     assert "usdt" in combined.lower()
 
 
+def test_wallet_help_exposes_public_continuation_commands() -> None:
+    result = run_predictclaw("wallet", "--help")
+
+    assert result.returncode == 0
+    combined = result.stdout + result.stderr
+    assert "continue-funding" in combined
+    assert "continue-follow-up" in combined
+
+
 def test_wallet_bootstrap_help_documents_preview_and_confirmation_flags() -> None:
     result = run_predictclaw("wallet", "bootstrap-vault", "--help")
 
@@ -297,6 +308,53 @@ def test_wallet_status_and_deposit_fail_cleanly_when_mcp_is_unavailable() -> Non
     assert "Traceback" not in deposit_combined
     assert "mandated-vault mcp" in status_combined.lower()
     assert "mandated-vault mcp" in deposit_combined.lower()
+
+
+def test_wallet_status_json_surfaces_route_conflict_guidance() -> None:
+    env = {
+        "PREDICT_ENV": "testnet",
+        "PREDICT_STORAGE_DIR": "/tmp/predict",
+        "PREDICT_WALLET_MODE": "mandated-vault",
+        "ERC_MANDATED_VAULT_ADDRESS": "0x2222222222222222222222222222222222222222",
+        "PREDICT_ACCOUNT_ADDRESS": "0x1234567890123456789012345678901234567890",
+        "PREDICT_PRIVY_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
+    }
+
+    status = run_wallet("status", "--json", env=env)
+
+    assert status.returncode == 1
+    assert status.stderr == ""
+    payload = json.loads(status.stdout)
+    assert payload["success"] is False
+    assert payload["errorCode"] == "route-mode-conflict"
+    assert payload["activeMode"] == "mandated-vault"
+    assert payload["activeRoute"] == "vault-control-plane"
+    assert payload["recommendedMode"] == "predict-account"
+    assert payload["recommendedRoute"] == "vault-to-predict-account"
+    assert payload["detectedCapabilities"]["predictAccountCredentials"] is True
+    assert payload["detectedCapabilities"]["mandatedVaultConfig"] is True
+
+
+def test_wallet_deposit_text_surfaces_route_conflict_guidance_without_traceback() -> (
+    None
+):
+    env = {
+        "PREDICT_ENV": "testnet",
+        "PREDICT_STORAGE_DIR": "/tmp/predict",
+        "PREDICT_WALLET_MODE": "mandated-vault",
+        "ERC_MANDATED_VAULT_ADDRESS": "0x2222222222222222222222222222222222222222",
+        "PREDICT_ACCOUNT_ADDRESS": "0x1234567890123456789012345678901234567890",
+        "PREDICT_PRIVY_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
+    }
+
+    deposit = run_wallet("deposit", env=env)
+
+    assert deposit.returncode == 1
+    combined = deposit.stdout + deposit.stderr
+    assert "vault-control-plane" in combined
+    assert "vault-to-predict-account" in combined
+    assert "PREDICT_WALLET_MODE=predict-account" in combined
+    assert "Traceback" not in combined
 
 
 def test_mandated_vault_unsupported_flows_fail_closed_without_traceback() -> None:

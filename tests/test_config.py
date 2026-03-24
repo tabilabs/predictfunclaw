@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 from eth_account import Account
 from predict_sdk import ChainId
@@ -420,7 +422,7 @@ def test_explicit_mandated_vault_mode_requires_address_or_full_derivation() -> N
 def test_explicit_mandated_vault_mode_still_rejects_predict_account_credentials() -> (
     None
 ):
-    with pytest.raises(ConfigError, match="does not allow Predict Account"):
+    with pytest.raises(ConfigError) as error:
         PredictConfig.from_env(
             {
                 **base_env(),
@@ -430,6 +432,20 @@ def test_explicit_mandated_vault_mode_still_rejects_predict_account_credentials(
                 "PREDICT_PRIVY_PRIVATE_KEY": PREDICT_PRIVY_PRIVATE_KEY,
             }
         )
+
+    message = str(error.value)
+    assert "vault-control-plane" in message
+    assert "vault-to-predict-account" in message
+    assert "PREDICT_WALLET_MODE=predict-account" in message
+    payload = error.value.to_dict()
+    detected_capabilities = cast(dict[str, object], payload["detectedCapabilities"])
+    assert payload["errorCode"] == "route-mode-conflict"
+    assert payload["activeMode"] == "mandated-vault"
+    assert payload["activeRoute"] == "vault-control-plane"
+    assert payload["recommendedMode"] == "predict-account"
+    assert payload["recommendedRoute"] == "vault-to-predict-account"
+    assert detected_capabilities["predictAccountCredentials"] is True
+    assert detected_capabilities["mandatedVaultConfig"] is True
 
 
 def test_mandated_vault_env_without_explicit_mode_fails_closed() -> None:

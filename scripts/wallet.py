@@ -62,6 +62,32 @@ def build_parser() -> argparse.ArgumentParser:
     deposit.add_argument("--json", action="store_true")
     deposit.set_defaults(handler=_handle_deposit)
 
+    continue_funding = subparsers.add_parser(
+        "continue-funding",
+        help="Record a confirmed funding transaction and advance the active overlay session.",
+    )
+    continue_funding.add_argument("--tx-hash", required=True)
+    continue_funding.add_argument("--confirmations", type=int, default=1)
+    continue_funding.add_argument("--block-number")
+    continue_funding.add_argument("--block-hash")
+    continue_funding.add_argument("--json", action="store_true")
+    continue_funding.set_defaults(handler=_handle_continue_funding)
+
+    continue_follow_up = subparsers.add_parser(
+        "continue-follow-up",
+        help="Record a terminal follow-up result and advance the active overlay session.",
+    )
+    continue_follow_up.add_argument("--reference-type", required=True)
+    continue_follow_up.add_argument("--reference-value", required=True)
+    continue_follow_up.add_argument(
+        "--status",
+        choices=["succeeded", "failed", "skipped"],
+        default="succeeded",
+    )
+    continue_follow_up.add_argument("--output-json")
+    continue_follow_up.add_argument("--json", action="store_true")
+    continue_follow_up.set_defaults(handler=_handle_continue_follow_up)
+
     bootstrap = subparsers.add_parser(
         "bootstrap-vault",
         help="Preview or confirm pure mandated-vault bootstrap deployment.",
@@ -148,12 +174,35 @@ def _load_funding_service() -> Any:
     return FundingService(PredictConfig.from_env())
 
 
+def _emit_error(args: argparse.Namespace, error: Exception) -> int:
+    if args.json:
+        payload: dict[str, object] = {
+            "success": False,
+            "error": type(error).__name__,
+            "message": str(error),
+        }
+        if hasattr(error, "to_dict"):
+            error_payload = cast(dict[str, object], getattr(error, "to_dict")())
+            payload.update(
+                {key: value for key, value in error_payload.items() if key != "message"}
+            )
+        print(json.dumps(payload, indent=2))
+        return 1
+
+    if hasattr(error, "format_lines"):
+        for line in cast(list[str], getattr(error, "format_lines")()):
+            print(line)
+        return 1
+
+    print(str(error))
+    return 1
+
+
 def _handle_status(args: argparse.Namespace) -> int:
     try:
         status = _load_manager().get_status()
     except (ConfigError, MandatedVaultMcpError) as error:
-        print(str(error))
-        return 1
+        return _emit_error(args, error)
 
     if args.json:
         print(json.dumps(status.to_dict(), indent=2))
@@ -173,9 +222,20 @@ def _handle_status(args: argparse.Namespace) -> int:
         )
         print(f"MCP Command: {mcp.get('command')}")
         print(f"MCP Runtime Ready: {'yes' if mcp.get('runtimeReady') else 'no'}")
+        print(f"Active Route: {payload.get('activeRoute')}")
+        print(f"Route Purpose: {payload.get('routePurpose')}")
+        if payload.get("sessionScope") is not None:
+            print(f"Session Scope: {payload.get('sessionScope')}")
+        session_binding = payload.get("sessionBinding")
+        if isinstance(session_binding, dict):
+            print(f"Linked Position ID: {session_binding.get('positionId')}")
+            print(f"Linked Market ID: {session_binding.get('marketId')}")
         print(
             "State-changing Flows Enabled: "
             f"{'yes' if payload.get('stateChangingFlowsEnabled') else 'no'}"
+        )
+        print(
+            "Route Guidance: This route funds the vault itself, not the Predict Account."
         )
         print(
             f"Vault Address: {payload.get('vaultAddress')} ({payload.get('vaultAddressSource')})"
@@ -227,6 +287,10 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Chain: {payload.get('chain')}")
     print(f"Signer Address: {payload.get('signerAddress')}")
     print(f"Funding Address: {payload.get('fundingAddress')}")
+    if payload.get("activeRoute") is not None:
+        print(f"Active Route: {payload.get('activeRoute')}")
+    if payload.get("routePurpose") is not None:
+        print(f"Route Purpose: {payload.get('routePurpose')}")
     print(f"BNB Balance (wei): {payload.get('bnbBalanceWei')}")
     print(f"USDT Balance (wei): {payload.get('usdtBalanceWei')}")
     print(f"Auth Ready: {'yes' if payload.get('authReady') else 'no'}")
@@ -253,8 +317,7 @@ def _handle_approve(args: argparse.Namespace) -> int:
     try:
         result = _load_manager().approve()
     except ConfigError as error:
-        print(str(error))
-        return 1
+        return _emit_error(args, error)
 
     payload = result.to_dict()
     if args.json:
@@ -272,8 +335,7 @@ def _handle_deposit(args: argparse.Namespace) -> int:
     try:
         details = _load_funding_service().get_deposit_details()
     except (ConfigError, MandatedVaultMcpError) as error:
-        print(str(error))
-        return 1
+        return _emit_error(args, error)
 
     payload = details.to_dict()
     if args.json:
@@ -282,8 +344,13 @@ def _handle_deposit(args: argparse.Namespace) -> int:
 
     if payload.get("mode") == "mandated-vault":
         print(f"Mode: {payload['mode']}")
+        print(f"Active Route: {payload.get('activeRoute')}")
+        print(f"Route Purpose: {payload.get('routePurpose')}")
         print(
             f"Vault Address: {payload['fundingAddress']} ({payload.get('vaultAddressSource', 'unknown')})"
+        )
+        print(
+            "Route Guidance: This route funds the vault itself, not the Predict Account."
         )
         print(f"Vault Exists: {'yes' if payload.get('vaultExists') else 'no'}")
         print("Accepted Assets: BNB, USDT")
@@ -306,6 +373,14 @@ def _handle_deposit(args: argparse.Namespace) -> int:
 
     if payload.get("fundingRoute") == "vault-to-predict-account":
         print(f"Mode: {payload['mode']}")
+        print(f"Active Route: {payload.get('activeRoute')}")
+        print(f"Route Purpose: {payload.get('routePurpose')}")
+        if payload.get("sessionScope") is not None:
+            print(f"Session Scope: {payload.get('sessionScope')}")
+        session_binding = payload.get("sessionBinding")
+        if isinstance(session_binding, dict):
+            print(f"Linked Position ID: {session_binding.get('positionId')}")
+            print(f"Linked Market ID: {session_binding.get('marketId')}")
         print(f"Funding Route: {payload['fundingRoute']}")
         print(f"Manual Top-Up Address: {payload.get('manualTopUpAddress')}")
         print(f"Predict Account Recipient: {payload['predictAccountAddress']}")
@@ -342,12 +417,65 @@ def _handle_deposit(args: argparse.Namespace) -> int:
 
     accepted_assets = ", ".join(details.accepted_assets)
     print(f"Mode: {payload['mode']}")
+    if payload.get("activeRoute") is not None:
+        print(f"Active Route: {payload.get('activeRoute')}")
+    if payload.get("routePurpose") is not None:
+        print(f"Route Purpose: {payload.get('routePurpose')}")
     print(f"Funding Address: {payload['fundingAddress']}")
     print(f"Signer Address: {payload['signerAddress']}")
     print(f"Chain: {payload['chain']}")
     print(f"Accepted Assets: {accepted_assets}")
     print(f"BNB Balance (wei): {payload['bnbBalanceWei']}")
     print(f"USDT Balance (wei): {payload['usdtBalanceWei']}")
+    return 0
+
+
+def _handle_continue_funding(args: argparse.Namespace) -> int:
+    try:
+        result = _load_funding_service().continue_funding(
+            tx_hash=args.tx_hash,
+            confirmations=args.confirmations,
+            block_number=args.block_number,
+            block_hash=args.block_hash,
+        )
+    except (ConfigError, MandatedVaultMcpError) as error:
+        return _emit_error(args, error)
+
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return 0
+
+    session = cast(dict[str, Any], result.get("session", {}))
+    next_step = cast(dict[str, Any], result.get("nextStep", {}))
+    task = cast(dict[str, Any], next_step.get("task", {}))
+    print(f"Session ID: {session.get('sessionId')}")
+    print(f"Session Status: {session.get('status')}")
+    print(f"Current Step: {session.get('currentStep')}")
+    print(f"Next Task Kind: {task.get('kind')}")
+    return 0
+
+
+def _handle_continue_follow_up(args: argparse.Namespace) -> int:
+    try:
+        output = json.loads(args.output_json) if args.output_json else None
+        result = _load_funding_service().continue_follow_up(
+            reference_type=args.reference_type,
+            reference_value=args.reference_value,
+            status=args.status,
+            output=output,
+        )
+    except (ConfigError, MandatedVaultMcpError, json.JSONDecodeError) as error:
+        return _emit_error(args, error)
+
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return 0
+
+    session = cast(dict[str, Any], result.get("session", {}))
+    follow_up = cast(dict[str, Any], result.get("followUpActionResult", {}))
+    print(f"Session ID: {session.get('sessionId')}")
+    print(f"Session Status: {session.get('status')}")
+    print(f"Follow-Up Status: {follow_up.get('status')}")
     return 0
 
 
@@ -393,8 +521,7 @@ def _handle_bootstrap_vault(args: argparse.Namespace) -> int:
     try:
         snapshot = _load_manager().bootstrap_vault(confirm=args.confirm)
     except (ConfigError, MandatedVaultMcpError) as error:
-        print(str(error))
-        return 1
+        return _emit_error(args, error)
 
     payload = snapshot.to_dict()
     if args.confirm:
@@ -447,8 +574,7 @@ def _handle_redeem_vault(args: argparse.Namespace) -> int:
             redeem_all=args.all,
         )
     except ConfigError as error:
-        print(str(error))
-        return 1
+        return _emit_error(args, error)
 
     payload = preview.to_dict()
     if args.json:
@@ -494,8 +620,7 @@ def _handle_withdraw(args: argparse.Namespace) -> int:
             withdraw_all=args.all,
         )
     except ConfigError as error:
-        print(str(error))
-        return 1
+        return _emit_error(args, error)
 
     payload = result.to_dict()
     if args.json:

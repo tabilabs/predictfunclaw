@@ -10,7 +10,7 @@ from .api import PredictApiClient
 from .auth import PredictAuthenticator
 from .config import ConfigError, PredictConfig, RuntimeEnv
 from .fixture_api import FixturePredictApiClient
-from .models import PositionRecord
+from .models import OrderRecord, PositionRecord
 from .pnl import compute_pnl
 from .position_storage import LocalPosition, PositionStorage
 
@@ -116,11 +116,19 @@ class PositionsService:
 
         for local in local_positions:
             remote = remote_by_token.get(local.token_id)
+            remote_order = None
+            if remote is None and local.order_hash:
+                remote_order = await self._fetch_remote_order(local.order_hash)
             mark = await self._current_mark_price(local.market_id, local.outcome_name)
             merged_quantity = (
                 str(remote.quantity)
                 if remote and remote.quantity is not None
                 else local.quantity
+            )
+            resolved_status = self._resolve_position_status(
+                local=local,
+                remote=remote,
+                remote_order=remote_order,
             )
             pnl = compute_pnl(
                 quantity_wei=merged_quantity,
@@ -135,9 +143,7 @@ class PositionsService:
                     question=local.question,
                     outcome=local.outcome_name,
                     source=local.source,
-                    status=(
-                        remote.status if remote and remote.status else local.status
-                    ).upper(),
+                    status=resolved_status,
                     quantity_wei=local.quantity,
                     remote_quantity_wei=merged_quantity
                     if remote and remote.quantity is not None
@@ -151,6 +157,24 @@ class PositionsService:
                     fee_rate_bps=local.fee_rate_bps,
                 )
             )
+            if resolved_status != local.status or (
+                remote_order is not None
+                and remote_order.status is not None
+                and remote_order.status != local.order_status
+            ):
+                self._storage.upsert(
+                    LocalPosition(
+                        **{
+                            **local.to_dict(),
+                            "status": resolved_status,
+                            "order_status": (
+                                remote_order.status
+                                if remote_order and remote_order.status is not None
+                                else local.order_status
+                            ),
+                        }
+                    )
+                )
 
         if include_external:
             tracked_tokens = {local.token_id for local in local_positions}
@@ -196,6 +220,34 @@ class PositionsService:
             return await client.get_positions()
         finally:
             await client.close()
+
+    async def _fetch_remote_order(self, order_hash: str) -> OrderRecord | None:
+        if self._config.env == RuntimeEnv.TEST_FIXTURE:
+            return None
+        if self._config.auth_signer_address is None:
+            return None
+        client = PredictApiClient(self._config)
+        try:
+            authenticator = PredictAuthenticator(self._config, client)
+            client._jwt_provider = authenticator.get_jwt
+            return await client.get_order(order_hash)
+        except Exception:
+            return None
+        finally:
+            await client.close()
+
+    def _resolve_position_status(
+        self,
+        *,
+        local: LocalPosition,
+        remote: PositionRecord | None,
+        remote_order: OrderRecord | None,
+    ) -> str:
+        if remote and remote.status:
+            return remote.status.upper()
+        if remote_order and remote_order.status:
+            return remote_order.status.upper()
+        return local.status.upper()
 
     async def _current_mark_price(self, market_id: str, outcome: str) -> float:
         detail = await self._get_market_detail(market_id)

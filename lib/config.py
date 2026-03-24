@@ -27,6 +27,65 @@ class WalletMode(str, Enum):
 class ConfigError(ValueError):
     """Raised when predict runtime configuration is invalid."""
 
+    def to_dict(self) -> dict[str, object]:
+        return {"message": str(self)}
+
+    def format_lines(self) -> list[str]:
+        return [str(self)]
+
+
+class RouteConflictConfigError(ConfigError):
+    def __init__(
+        self,
+        *,
+        active_mode: str,
+        active_route: str,
+        recommended_mode: str,
+        recommended_route: str,
+        route_conflict_reason: str,
+        detected_capabilities: dict[str, bool],
+        next_step: str,
+    ) -> None:
+        self.error_code = "route-mode-conflict"
+        self.active_mode = active_mode
+        self.active_route = active_route
+        self.recommended_mode = recommended_mode
+        self.recommended_route = recommended_route
+        self.route_conflict_reason = route_conflict_reason
+        self.detected_capabilities = detected_capabilities
+        self.next_step = next_step
+        super().__init__(
+            "Current active route is "
+            f"{active_route} because PREDICT_WALLET_MODE={active_mode}, "
+            "but Predict Account credentials are also configured. "
+            f"If your goal is funding Predict Account, switch to PREDICT_WALLET_MODE={recommended_mode} "
+            f"to use the {recommended_route} route."
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "errorCode": self.error_code,
+            "message": str(self),
+            "activeMode": self.active_mode,
+            "activeRoute": self.active_route,
+            "recommendedMode": self.recommended_mode,
+            "recommendedRoute": self.recommended_route,
+            "routeConflictReason": self.route_conflict_reason,
+            "detectedCapabilities": self.detected_capabilities,
+            "nextStep": self.next_step,
+        }
+
+    def format_lines(self) -> list[str]:
+        return [
+            str(self),
+            f"Active Mode: {self.active_mode}",
+            f"Active Route: {self.active_route}",
+            f"Recommended Mode: {self.recommended_mode}",
+            f"Recommended Route: {self.recommended_route}",
+            f"Reason: {self.route_conflict_reason}",
+            f"Next Step: {self.next_step}",
+        ]
+
 
 MANDATED_MCP_COMMAND_DEFAULT = "erc-mandated-mcp"
 MANDATED_CONTRACT_VERSION_DEFAULT = "v0.3.0-agent-contract"
@@ -83,6 +142,28 @@ def redact_text(text: str, secrets: list[str | None]) -> str:
     redacted = re.sub(r"Bearer\s+[A-Za-z0-9._-]+", "Bearer <redacted>", redacted)
     redacted = re.sub(r"0x[a-fA-F0-9]{64}", "0x<redacted>", redacted)
     return redacted
+
+
+def _build_predict_account_overlay_route_conflict() -> RouteConflictConfigError:
+    return RouteConflictConfigError(
+        active_mode=WalletMode.MANDATED_VAULT.value,
+        active_route="vault-control-plane",
+        recommended_mode=WalletMode.PREDICT_ACCOUNT.value,
+        recommended_route="vault-to-predict-account",
+        route_conflict_reason=(
+            "mandated-vault mode selects the pure vault control-plane path, "
+            "while the configured Predict Account credentials indicate an overlay funding workflow"
+        ),
+        detected_capabilities={
+            "predictAccountCredentials": True,
+            "mandatedVaultConfig": True,
+            "predictAccountOverlayCandidate": True,
+        },
+        next_step=(
+            "Set PREDICT_WALLET_MODE=predict-account and keep the current ERC_MANDATED_* settings "
+            "if your goal is topping up Predict Account."
+        ),
+    )
 
 
 def _default_api_base_url(runtime_env: RuntimeEnv) -> str:
@@ -314,6 +395,8 @@ class PredictConfig(BaseModel):
         runtime_env = RuntimeEnv(source.get("PREDICT_ENV", RuntimeEnv.MAINNET.value))
         wallet_mode_override = _wallet_mode_or_none(source.get("PREDICT_WALLET_MODE"))
         private_key = _secret_or_none(source.get("PREDICT_EOA_PRIVATE_KEY"))
+        predict_account_address = _value_or_none(source.get("PREDICT_ACCOUNT_ADDRESS"))
+        privy_private_key = _secret_or_none(source.get("PREDICT_PRIVY_PRIVATE_KEY"))
         mandated_chain_id = _int_or_none(source.get("ERC_MANDATED_CHAIN_ID"))
         mandated_vault_address = _value_or_none(
             source.get("ERC_MANDATED_VAULT_ADDRESS")
@@ -339,6 +422,18 @@ class PredictConfig(BaseModel):
         mandated_vault_symbol = raw_mandated_vault_symbol
         mandated_vault_authority = raw_mandated_vault_authority
         mandated_vault_salt = raw_mandated_vault_salt
+        has_mandated_config_input = any(
+            _value_or_none(source.get(env_name)) is not None
+            for env_name in MANDATED_INPUT_ENV_NAMES
+        )
+
+        if (
+            wallet_mode_override == WalletMode.MANDATED_VAULT
+            and predict_account_address is not None
+            and privy_private_key is not None
+            and has_mandated_config_input
+        ):
+            raise _build_predict_account_overlay_route_conflict()
 
         if (
             wallet_mode_override == WalletMode.MANDATED_VAULT
@@ -368,12 +463,8 @@ class PredictConfig(BaseModel):
                 wallet_mode_override=wallet_mode_override,
                 api_key=_secret_or_none(source.get("PREDICT_API_KEY")),
                 private_key=private_key,
-                predict_account_address=_value_or_none(
-                    source.get("PREDICT_ACCOUNT_ADDRESS")
-                ),
-                privy_private_key=_secret_or_none(
-                    source.get("PREDICT_PRIVY_PRIVATE_KEY")
-                ),
+                predict_account_address=predict_account_address,
+                privy_private_key=privy_private_key,
                 mandated_vault_address=mandated_vault_address,
                 mandated_factory_address=mandated_factory_address,
                 mandated_vault_asset_address=mandated_vault_asset_address,
@@ -415,10 +506,7 @@ class PredictConfig(BaseModel):
                 mandated_funding_window_seconds=_int_or_none(
                     source.get("ERC_MANDATED_FUNDING_WINDOW_SECONDS")
                 ),
-                has_mandated_config_input=any(
-                    _value_or_none(source.get(env_name)) is not None
-                    for env_name in MANDATED_INPUT_ENV_NAMES
-                ),
+                has_mandated_config_input=has_mandated_config_input,
                 has_mandated_explicit_vault_input=mandated_vault_address is not None,
                 has_any_mandated_derivation_input=any(
                     _value_or_none(source.get(env_name)) is not None

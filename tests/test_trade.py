@@ -12,6 +12,7 @@ import pytest
 from conftest import get_predict_root
 from lib.config import ConfigError, PredictConfig, WalletMode
 from lib.position_storage import PositionStorage
+from lib.session_storage import SessionStorage
 from lib.trade_service import TradeService
 
 
@@ -513,13 +514,13 @@ async def test_trade_buy_predict_account_overlay_uses_predict_path_when_balance_
 
 
 @pytest.mark.asyncio
-async def test_trade_buy_predict_account_overlay_fails_with_funding_guidance_when_balance_insufficient() -> (
-    None
-):
+async def test_trade_buy_predict_account_overlay_fails_with_funding_guidance_when_balance_insufficient(
+    tmp_path,
+) -> None:
     config = PredictConfig.from_env(
         {
             "PREDICT_ENV": "testnet",
-            "PREDICT_STORAGE_DIR": "/tmp/predict",
+            "PREDICT_STORAGE_DIR": str(tmp_path),
             "PREDICT_WALLET_MODE": "predict-account",
             "PREDICT_ACCOUNT_ADDRESS": "0x1234567890123456789012345678901234567890",
             "PREDICT_PRIVY_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
@@ -564,3 +565,12 @@ async def test_trade_buy_predict_account_overlay_fails_with_funding_guidance_whe
     assert "nextStepKind=submitFunding" in message
     assert "wallet deposit --json" in message
     assert len(api_client.created_orders) == 0
+
+    session = SessionStorage(config.storage_dir).get_active_session(
+        predict_account_address="0x1234567890123456789012345678901234567890"
+    )
+    assert session is not None
+    assert session.market_id == "123"
+    assert session.position_id == "pos-123-yes"
+    assert session.order_hash is None
+    assert session.funding_session["status"] == "pendingFunding"

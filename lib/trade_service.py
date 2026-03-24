@@ -22,6 +22,7 @@ from .config import (
 from .fixture_api import FixturePredictApiClient
 from .orderbook import orderbook_record_to_sdk_book, resolve_outcome
 from .position_storage import LocalPosition, PositionStorage
+from .session_storage import FundAndActionSessionRecord, SessionStorage
 from .wallet_manager import (
     FixtureWalletSdk,
     MandatedVaultBridgeProtocol,
@@ -135,6 +136,12 @@ class TradeService:
                     trade_signer_address=sdk.signer_address,
                     current_usdt_balance_wei=usdt_balance,
                     wallet_sdk=sdk,
+                )
+                self._persist_overlay_session(
+                    market_id=str(market_id),
+                    outcome=outcome_label,
+                    predict_account_address=sdk.funding_address,
+                    orchestration=orchestration,
                 )
                 raise ConfigError(
                     _format_overlay_funding_required_error(
@@ -372,6 +379,49 @@ class TradeService:
             token_id=outcome.token_id,
             maker_amount=str(amount_wei),
             taker_amount=str(amount_wei),
+        )
+
+    def _persist_overlay_session(
+        self,
+        *,
+        market_id: str,
+        outcome: str,
+        predict_account_address: str,
+        orchestration: OverlayOrchestrationProtocol,
+    ) -> None:
+        payload = orchestration.to_dict()
+        funding_session = payload.get("fundingSession")
+        funding_next_step = payload.get("fundingNextStep")
+        funding_plan = payload.get("fundingPlan")
+        if not isinstance(funding_session, dict):
+            return
+        if not isinstance(funding_next_step, dict):
+            return
+        if not isinstance(funding_plan, dict):
+            return
+
+        session_id = str(funding_session.get("sessionId") or "").strip()
+        if not session_id:
+            return
+        timestamp = str(
+            funding_session.get("updatedAt") or funding_session.get("createdAt") or ""
+        )
+        position_id = f"pos-{market_id}-{outcome.lower()}"
+        SessionStorage(self._config.storage_dir).upsert(
+            FundAndActionSessionRecord(
+                session_id=session_id,
+                predict_account_address=predict_account_address,
+                market_id=market_id,
+                position_id=position_id,
+                outcome=outcome,
+                order_hash=None,
+                session_scope="specific-trade",
+                funding_plan=funding_plan,
+                funding_session=funding_session,
+                funding_next_step=funding_next_step,
+                created_at=str(funding_session.get("createdAt") or timestamp),
+                updated_at=timestamp,
+            )
         )
 
 

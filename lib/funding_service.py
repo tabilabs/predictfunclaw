@@ -4,6 +4,7 @@ import asyncio
 import os
 import re
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Protocol, cast
 
@@ -18,6 +19,7 @@ from .config import (
     mandated_vault_v1_unsupported_error,
 )
 from .mandated_mcp_bridge import MandatedVaultMcpBridge
+from .session_storage import FundAndActionSessionRecord, SessionStorage
 from .wallet_manager import (
     FixtureWalletSdk,
     MandatedVaultBridgeProtocol,
@@ -45,6 +47,17 @@ PUBLIC_RPC_FALLBACKS = {
     97: "https://data-seed-prebsc-1-s1.bnbchain.org:8545/",
 }
 CUSTOM_ERROR_DATA_RE = re.compile(r"0x[a-fA-F0-9]{8,}")
+
+
+def _utc_timestamp() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _model_dump(value: Any) -> dict[str, Any]:
+    if hasattr(value, "model_dump"):
+        return cast(dict[str, Any], value.model_dump(by_alias=True))
+    return cast(dict[str, Any], value)
+
 
 ERC20_METADATA_ABI = [
     {
@@ -136,11 +149,15 @@ class DepositDetails:
     accepted_assets: list[str]
     bnb_balance_wei: int
     usdt_balance_wei: int
+    active_route: str | None = None
+    route_purpose: str | None = None
     vault_address_source: str | None = None
     vault_exists: bool | None = None
     create_vault_preparation: dict[str, object] | None = None
     bootstrap_preview: dict[str, object] | None = None
     permission_summary: dict[str, object] | None = None
+    session_scope: str | None = None
+    session_binding: dict[str, object] | None = None
     funding_route: str | None = None
     predict_account_address: str | None = None
     trade_signer_address: str | None = None
@@ -157,6 +174,10 @@ class DepositDetails:
             "bnbBalanceWei": self.bnb_balance_wei,
             "usdtBalanceWei": self.usdt_balance_wei,
         }
+        if self.active_route is not None:
+            payload["activeRoute"] = self.active_route
+        if self.route_purpose is not None:
+            payload["routePurpose"] = self.route_purpose
         if self.vault_address_source is not None:
             payload["vaultAddressSource"] = self.vault_address_source
         if self.vault_exists is not None:
@@ -169,6 +190,10 @@ class DepositDetails:
             payload["bootstrapPreview"] = self.bootstrap_preview
         if self.permission_summary is not None:
             payload["permissionSummary"] = self.permission_summary
+        if self.session_scope is not None:
+            payload["sessionScope"] = self.session_scope
+        if self.session_binding is not None:
+            payload["sessionBinding"] = self.session_binding
         if self.funding_route is not None:
             payload["fundingRoute"] = self.funding_route
             payload["predictAccountAddress"] = self.predict_account_address
@@ -317,6 +342,157 @@ class FundingService:
             usdt_balance_wei=sdk.get_usdt_balance_wei(),
         )
 
+    def continue_funding(
+        self,
+        *,
+        tx_hash: str,
+        confirmations: int = 1,
+        block_number: str | None = None,
+        block_hash: str | None = None,
+    ) -> dict[str, object]:
+        record = self._require_active_session()
+        task = cast(dict[str, Any], record.funding_next_step.get("task", {}))
+        funding_plan = cast(
+            dict[str, Any] | None,
+            task.get("fundingPlan")
+            or record.funding_plan
+            or cast(
+                dict[str, Any], record.funding_session.get("fundAndActionPlan", {})
+            ).get("fundingPlan"),
+        )
+        if task.get("kind") not in {"submitFunding", "pollFundingResult"}:
+            raise ConfigError(
+                "Active session is not waiting for a funding continuation step."
+            )
+        if not isinstance(funding_plan, dict):
+            raise ConfigError(
+                "Active session did not expose a funding plan for continuation."
+            )
+
+        bridge = self._bridge_factory(self._config)
+
+        async def _run_and_close() -> dict[str, object]:
+            await bridge.connect()
+            try:
+                updated_at = _utc_timestamp()
+                transfer = await bridge.create_vault_asset_transfer_result(
+                    asset_transfer_plan=funding_plan,
+                    status="confirmed",
+                    updated_at=updated_at,
+                    submitted_at=updated_at,
+                    completed_at=updated_at,
+                    attempt=1,
+                    chain_id=int(self._config.chain_id),
+                    tx_hash=tx_hash,
+                    receipt={
+                        "blockNumber": block_number,
+                        "blockHash": block_hash,
+                        "confirmations": confirmations,
+                    },
+                    output={"status": "ok"},
+                )
+                transfer_payload = _model_dump(transfer.assetTransferResult)
+                applied = await bridge.apply_agent_fund_and_action_session_event(
+                    session=record.funding_session,
+                    event={
+                        "type": "fundingConfirmed",
+                        "updatedAt": updated_at,
+                        "assetTransferResult": transfer_payload,
+                    },
+                )
+                session_payload = _model_dump(applied.session)
+                next_step = await bridge.next_agent_fund_and_action_session_step(
+                    session=session_payload
+                )
+                next_step_payload = _model_dump(next_step)
+                record.funding_session = session_payload
+                record.funding_next_step = next_step_payload
+                record.updated_at = updated_at
+                SessionStorage(self._config.storage_dir).upsert(record)
+                return {
+                    "session": session_payload,
+                    "assetTransferResult": transfer_payload,
+                    "nextStep": next_step_payload,
+                    "sessionBinding": record.binding_payload(),
+                }
+            finally:
+                await bridge.close()
+
+        return asyncio.run(_run_and_close())
+
+    def continue_follow_up(
+        self,
+        *,
+        reference_type: str,
+        reference_value: str,
+        status: str = "succeeded",
+        output: dict[str, Any] | None = None,
+    ) -> dict[str, object]:
+        record = self._require_active_session()
+        task = cast(dict[str, Any], record.funding_next_step.get("task", {}))
+        follow_up_action_plan = cast(
+            dict[str, Any] | None,
+            task.get("followUpActionPlan")
+            or cast(
+                dict[str, Any], record.funding_session.get("fundAndActionPlan", {})
+            ).get("followUpActionPlan"),
+        )
+        if task.get("kind") not in {"submitFollowUp", "pollFollowUpResult"}:
+            raise ConfigError(
+                "Active session is not waiting for a follow-up continuation step."
+            )
+        if not isinstance(follow_up_action_plan, dict):
+            raise ConfigError(
+                "Active session did not expose a follow-up action plan for continuation."
+            )
+
+        bridge = self._bridge_factory(self._config)
+
+        async def _run_and_close() -> dict[str, object]:
+            await bridge.connect()
+            try:
+                updated_at = _utc_timestamp()
+                follow_up_result = await bridge.create_agent_follow_up_action_result(
+                    follow_up_action_plan=follow_up_action_plan,
+                    status=status,
+                    updated_at=updated_at,
+                    completed_at=updated_at,
+                    attempt=1,
+                    reference={"type": reference_type, "value": reference_value},
+                    output=output,
+                )
+                follow_up_payload = _model_dump(follow_up_result.followUpActionResult)
+                applied = await bridge.apply_agent_fund_and_action_session_event(
+                    session=record.funding_session,
+                    event={
+                        "type": "followUpResultReceived",
+                        "followUpActionResult": follow_up_payload,
+                    },
+                )
+                session_payload = _model_dump(applied.session)
+                record.funding_session = session_payload
+                record.funding_next_step = {"task": {"kind": "completed"}}
+                record.updated_at = updated_at
+                SessionStorage(self._config.storage_dir).upsert(record)
+                return {
+                    "session": session_payload,
+                    "followUpActionResult": follow_up_payload,
+                    "sessionBinding": record.binding_payload(),
+                }
+            finally:
+                await bridge.close()
+
+        return asyncio.run(_run_and_close())
+
+    def _require_active_session(self) -> FundAndActionSessionRecord:
+        predict_account_address = self._config.predict_account_address
+        record = SessionStorage(self._config.storage_dir).get_active_session(
+            predict_account_address=predict_account_address
+        )
+        if record is None:
+            raise ConfigError("No active overlay funding session is available.")
+        return record
+
     def _get_predict_account_overlay_deposit_details(
         self, sdk: TransferCapableWallet
     ) -> DepositDetails:
@@ -339,6 +515,22 @@ class FundingService:
                     current_usdt_balance_wei=usdt_balance,
                     wallet_sdk=sdk,
                 )
+                session_record = SessionStorage(
+                    self._config.storage_dir
+                ).get_active_session(predict_account_address=sdk.funding_address)
+                orchestration_payload = orchestration.to_dict()
+                session_scope: str | None = None
+                session_binding: dict[str, object] | None = None
+                if session_record is not None:
+                    session_scope = session_record.session_scope
+                    session_binding = session_record.binding_payload()
+                    orchestration_payload["fundingPlan"] = session_record.funding_plan
+                    orchestration_payload["fundingSession"] = (
+                        session_record.funding_session
+                    )
+                    orchestration_payload["fundingNextStep"] = (
+                        session_record.funding_next_step
+                    )
                 return DepositDetails(
                     mode=str(getattr(sdk.mode, "value", sdk.mode)),
                     funding_address=sdk.funding_address,
@@ -347,13 +539,15 @@ class FundingService:
                     accepted_assets=["BNB", "USDT"],
                     bnb_balance_wei=bnb_balance,
                     usdt_balance_wei=usdt_balance,
+                    active_route="vault-to-predict-account",
+                    route_purpose="predict-account-top-up-and-trading",
                     vault_address_source=orchestration.vault_address_source,
                     vault_exists=orchestration.vault_exists,
                     funding_route=orchestration.funding_route,
                     predict_account_address=orchestration.predict_account_address,
                     trade_signer_address=orchestration.trade_signer_address,
                     vault_address=orchestration.vault_address,
-                    funding_orchestration=orchestration.to_dict(),
+                    funding_orchestration=orchestration_payload,
                     permission_summary=_build_mandated_permission_summary(
                         self._config,
                         permission_model="vault-to-predict-account-overlay",
@@ -378,6 +572,8 @@ class FundingService:
                             orchestration.funding_policy.get("windowSeconds"),
                         ),
                     ).to_dict(),
+                    session_scope=session_scope,
+                    session_binding=session_binding,
                 )
             finally:
                 await bridge.close()
@@ -432,6 +628,8 @@ class FundingService:
                     accepted_assets=["BNB", "USDT"],
                     bnb_balance_wei=0,
                     usdt_balance_wei=0,
+                    active_route="vault-control-plane",
+                    route_purpose="bootstrap-or-direct-vault-ops",
                     vault_address_source=resolution.vault_address_source,
                     vault_exists=resolution.vault_deployed,
                     create_vault_preparation=preparation,

@@ -30,6 +30,7 @@ from .mandated_mcp_bridge import (
     VaultBootstrapResult,
     VaultHealthCheckResult,
 )
+from .session_storage import SessionStorage
 
 
 @dataclass
@@ -226,6 +227,43 @@ class MandatedVaultBridgeProtocol(Protocol):
         self,
         *,
         session: dict[str, Any],
+    ) -> Any: ...
+
+    async def apply_agent_fund_and_action_session_event(
+        self,
+        *,
+        session: Mapping[str, Any],
+        event: Mapping[str, Any],
+    ) -> Any: ...
+
+    async def create_agent_follow_up_action_result(
+        self,
+        *,
+        follow_up_action_plan: Mapping[str, Any],
+        status: str,
+        updated_at: str,
+        started_at: str | None = None,
+        completed_at: str | None = None,
+        attempt: int | None = None,
+        reference: Mapping[str, Any] | None = None,
+        output: Mapping[str, Any] | None = None,
+        error: Mapping[str, Any] | None = None,
+    ) -> Any: ...
+
+    async def create_vault_asset_transfer_result(
+        self,
+        *,
+        asset_transfer_plan: Mapping[str, Any],
+        status: str,
+        updated_at: str,
+        submitted_at: str | None = None,
+        completed_at: str | None = None,
+        attempt: int | None = None,
+        chain_id: int | None = None,
+        tx_hash: str | None = None,
+        receipt: Mapping[str, Any] | None = None,
+        output: Mapping[str, Any] | None = None,
+        error: Mapping[str, Any] | None = None,
     ) -> Any: ...
 
 
@@ -458,6 +496,8 @@ class WalletStatusSnapshot:
     usdt_balance_wei: int
     auth_ready: bool
     approvals: ApprovalSnapshot
+    active_route: str | None = None
+    route_purpose: str | None = None
     funding_route: str | None = None
     predict_account_address: str | None = None
     trade_signer_address: str | None = None
@@ -466,6 +506,8 @@ class WalletStatusSnapshot:
     vault_exists: bool | None = None
     funding_orchestration: dict[str, object] | None = None
     permission_summary: dict[str, object] | None = None
+    session_scope: str | None = None
+    session_binding: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, object]:
         payload: dict[str, object] = {
@@ -478,6 +520,10 @@ class WalletStatusSnapshot:
             "authReady": self.auth_ready,
             "approvals": self.approvals.to_dict(),
         }
+        if self.active_route is not None:
+            payload["activeRoute"] = self.active_route
+        if self.route_purpose is not None:
+            payload["routePurpose"] = self.route_purpose
         if self.funding_route is not None:
             payload.update(
                 {
@@ -498,6 +544,10 @@ class WalletStatusSnapshot:
             )
         if self.permission_summary is not None:
             payload["permissionSummary"] = self.permission_summary
+        if self.session_scope is not None:
+            payload["sessionScope"] = self.session_scope
+        if self.session_binding is not None:
+            payload["sessionBinding"] = self.session_binding
         return payload
 
 
@@ -663,6 +713,8 @@ class MandatedWalletStatusSnapshot:
     vault_deployed: bool
     vault_health: VaultHealthCheckResult | None
     state_changing_flows_enabled: bool
+    active_route: str = "vault-control-plane"
+    route_purpose: str = "bootstrap-or-direct-vault-ops"
     bootstrap_preview: MandatedVaultBootstrapSnapshot | None = None
     permission_summary: VaultPermissionSummary | None = None
 
@@ -682,6 +734,8 @@ class MandatedWalletStatusSnapshot:
                 "name": self.selected_chain_name,
                 "chainId": self.selected_chain_id,
             },
+            "activeRoute": self.active_route,
+            "routePurpose": self.route_purpose,
             "mcp": {
                 "command": self.mcp_command,
                 "availableTools": self.mcp_available_tools,
@@ -1353,6 +1407,22 @@ class WalletManager:
                     current_usdt_balance_wei=usdt_balance,
                     wallet_sdk=sdk,
                 )
+                session_record = SessionStorage(
+                    self._config.storage_dir
+                ).get_active_session(predict_account_address=sdk.funding_address)
+                orchestration_payload = orchestration.to_dict()
+                session_scope = "generic-balance-top-up"
+                session_binding: dict[str, object] | None = None
+                if session_record is not None:
+                    session_scope = session_record.session_scope
+                    session_binding = session_record.binding_payload()
+                    orchestration_payload["fundingPlan"] = session_record.funding_plan
+                    orchestration_payload["fundingSession"] = (
+                        session_record.funding_session
+                    )
+                    orchestration_payload["fundingNextStep"] = (
+                        session_record.funding_next_step
+                    )
                 return WalletStatusSnapshot(
                     mode=sdk.mode.value,
                     signer_address=sdk.signer_address,
@@ -1362,13 +1432,15 @@ class WalletManager:
                     usdt_balance_wei=usdt_balance,
                     auth_ready=bool(self._config.auth_signer_address),
                     approvals=sdk.get_approval_snapshot(),
+                    active_route="vault-to-predict-account",
+                    route_purpose="predict-account-top-up-and-trading",
                     funding_route=orchestration.funding_route,
                     predict_account_address=orchestration.predict_account_address,
                     trade_signer_address=orchestration.trade_signer_address,
                     vault_address=orchestration.vault_address,
                     vault_address_source=orchestration.vault_address_source,
                     vault_exists=orchestration.vault_exists,
-                    funding_orchestration=orchestration.to_dict(),
+                    funding_orchestration=orchestration_payload,
                     permission_summary=_build_mandated_permission_summary(
                         self._config,
                         permission_model="vault-to-predict-account-overlay",
@@ -1393,6 +1465,8 @@ class WalletManager:
                             orchestration.funding_policy.get("windowSeconds"),
                         ),
                     ).to_dict(),
+                    session_scope=session_scope,
+                    session_binding=session_binding,
                 )
             finally:
                 await bridge.close()

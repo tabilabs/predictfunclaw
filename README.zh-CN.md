@@ -183,6 +183,10 @@ PREDICT_ACCOUNT_ADDRESS=0xYOUR_PREDICT_ACCOUNT
 PREDICT_PRIVY_PRIVATE_KEY=0xYOUR_PRIVY_EXPORTED_KEY
 ```
 
+`PREDICT_ACCOUNT_ADDRESS` 请使用 `https://predict.fun/account/deposit` 页面显示的地址。这个页面显示的是 Predict Account smart-wallet 地址，也就是 overlay 模式下的手动充值地址、资金接收地址和交易身份地址。
+
+如果 `https://predict.fun/account/settings` 页面显示的是另一个地址，不要把它填进 `PREDICT_ACCOUNT_ADDRESS`。实际使用中，settings 页面可能显示 signer / owner 地址，而 PredictClaw 需要的是 deposit 页面上的 Predict Account smart-wallet 地址。
+
 ### mandated-vault 模式（默认 bootstrap 流程）
 
 ```dotenv
@@ -306,6 +310,13 @@ PredictClaw 支持四种显式 wallet mode：
 - 再叠加所需的 `ERC_MANDATED_*` overlay 输入（`predict-account + ERC_MANDATED_*`）
 
 这是 Predict Account 交易身份工作流的默认路线。这样在 `wallet status --json` 与 `wallet deposit --json` 中会暴露 `vault-to-predict-account` 语义。
+
+### 当用户问“充值地址是什么”时应如何回答
+
+- 如果当前模式是 `predict-account`（包括 `predict-account + ERC_MANDATED_*` overlay），面向用户的默认回答是：直接充值 Predict Account 的 deposit 地址。在 PredictClaw 语义里，它就是 `PREDICT_ACCOUNT_ADDRESS`、`manualTopUpAddress`，也是 `wallet deposit` 返回的接收地址。
+- 结合当前产品页面，这个地址应来自 `https://predict.fun/account/deposit`。
+- 如果当前模式是 pure `mandated-vault`，那就是 vault control-plane 路线。此时面向治理 / 自动化的回答应是：先给 vault 充值，再通过 Vault->Predict 的 funding step 给 Predict Account 补资。
+- 也就是说，当用户询问“充值地址”时，文档和回答都应该结合当前模式给出，而不是给一个全局唯一答案。
 
 ### pure mandated-vault 边界
 

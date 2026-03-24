@@ -125,6 +125,10 @@ PREDICT_ACCOUNT_ADDRESS=0xYOUR_PREDICT_ACCOUNT
 PREDICT_PRIVY_PRIVATE_KEY=0xYOUR_PRIVY_EXPORTED_KEY
 ```
 
+Use `https://predict.fun/account/deposit` for `PREDICT_ACCOUNT_ADDRESS`. That page shows the Predict Account smart-wallet address used as the manual top-up address, funding recipient, and trading identity in overlay mode.
+
+Do not use the address from `https://predict.fun/account/settings` when it differs. In practice, the settings page can expose the signer / owner address, while PredictClaw expects the Predict Account smart-wallet address from the deposit page.
+
 ### mandated-vault mode (default bootstrap flow)
 
 ```dotenv
@@ -217,6 +221,13 @@ The optional `ERC_MANDATED_FUNDING_*` envs cap Vault→Predict transfers by per-
 - `eoa` — direct signer path for wallet, trade, and funding flows.
 - `predict-account` — smart-wallet funding/trading path using `PREDICT_ACCOUNT_ADDRESS` plus `PREDICT_PRIVY_PRIVATE_KEY`.
 - `mandated-vault` — advanced explicit opt-in control-plane path for protected vault-only status/deposit flows.
+
+## How to answer funding-address questions
+
+- In `predict-account` mode, including `predict-account + ERC_MANDATED_*` overlay, the default user-facing answer is the Predict Account deposit address itself. That address is `PREDICT_ACCOUNT_ADDRESS`, `manualTopUpAddress`, and the `wallet deposit` recipient.
+- For the current product UI, source that address from `https://predict.fun/account/deposit`.
+- In pure `mandated-vault`, answer in terms of the active route: governance/automation flows fund the vault first, then move assets from Vault to Predict Account as a separate funding step.
+- Do not answer with one global address rule. Always answer according to the current wallet mode.
 
 ## First-time setup
 

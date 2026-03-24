@@ -183,6 +183,10 @@ PREDICT_ACCOUNT_ADDRESS=0xYOUR_PREDICT_ACCOUNT
 PREDICT_PRIVY_PRIVATE_KEY=0xYOUR_PRIVY_EXPORTED_KEY
 ```
 
+Use `https://predict.fun/account/deposit` for `PREDICT_ACCOUNT_ADDRESS`. That page shows the Predict Account smart-wallet address used as the overlay manual top-up address, funding recipient, and trading identity.
+
+Do not copy the address shown at `https://predict.fun/account/settings` into `PREDICT_ACCOUNT_ADDRESS` when it differs. In practice, the settings page can show the signer/owner address, while PredictClaw expects the Predict Account smart-wallet address that matches the deposit page.
+
 ### mandated-vault mode (default bootstrap flow)
 
 ```dotenv
@@ -304,6 +308,13 @@ If the goal is to keep Predict Account as the trading identity while Vault only 
 - plus the required `ERC_MANDATED_*` overlay inputs (`predict-account + ERC_MANDATED_*`)
 
 This is the default route for the Predict Account trading-identity workflow. It exposes `vault-to-predict-account` semantics in `wallet status --json` and `wallet deposit --json`.
+
+### How to answer "what address should I fund?"
+
+- If the active mode is `predict-account` (including `predict-account + ERC_MANDATED_*` overlay), the default user-facing answer is: fund the Predict Account deposit address directly. In PredictClaw terms, that is `PREDICT_ACCOUNT_ADDRESS`, `manualTopUpAddress`, and the `wallet deposit` recipient.
+- For the current product UI, use `https://predict.fun/account/deposit` for that address.
+- If the active mode is pure `mandated-vault`, the route is vault control-plane first. In that mode, the advanced automation/governance answer is: fund the vault first, then use Vault->Predict funding to top up the Predict Account.
+- When a user asks for the funding address, always answer in terms of the current mode instead of giving one global address rule.
 
 ### Pure mandated-vault boundaries
 

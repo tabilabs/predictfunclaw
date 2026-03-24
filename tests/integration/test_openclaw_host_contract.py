@@ -701,7 +701,9 @@ def test_openclaw_installed_skill_overlay_deposit_text_separates_manual_top_up_a
     assert "Funding " + "Vault Address" not in result.stdout
     assert "Current USDT Balance:" in result.stdout
     assert "Required Top-Up:" in result.stdout
-    assert "Next Step: Submit vault funding transaction" in result.stdout
+    assert "Required Top-Up: 0" in result.stdout
+    assert "Next Step: No additional funding required" in result.stdout
+    assert "Next Step: Submit vault funding transaction" not in result.stdout
 
 
 def test_openclaw_installed_skill_overlay_status_text_shows_shortfall_and_next_step(
@@ -716,7 +718,9 @@ def test_openclaw_installed_skill_overlay_status_text_shows_shortfall_and_next_s
     assert f"Manual Top-Up Address: {PREDICT_ACCOUNT_ADDRESS}" in result.stdout
     assert "Current USDT Balance:" in result.stdout
     assert "Required Top-Up:" in result.stdout
-    assert "Next Step: Submit vault funding transaction" in result.stdout
+    assert "Required Top-Up: 0" in result.stdout
+    assert "Next Step: No additional funding required" in result.stdout
+    assert "Next Step: Submit vault funding transaction" not in result.stdout
 
 
 def test_openclaw_installed_skill_supports_predict_account_overlay_buy_via_env_injection(

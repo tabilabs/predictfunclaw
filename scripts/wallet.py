@@ -372,14 +372,18 @@ def _overlay_human_next_steps(payload: dict[str, Any]) -> list[str]:
     required_amount = funding_target.get("requiredAmountRaw")
     shortfall = funding_target.get("fundingShortfallRaw")
     next_step_summary = task.get("summary")
+    shortfall_text = str(shortfall) if shortfall is not None else None
+    required_amount_text = str(required_amount) if required_amount is not None else None
 
     if current_balance is not None:
         lines.append(f"Current USDT Balance: {current_balance}")
     if required_amount is not None:
         lines.append(f"Required Top-Up: {required_amount}")
-    if shortfall is not None:
+    if shortfall is not None and shortfall_text not in {"", "0"}:
         lines.append(f"Shortfall: {shortfall}")
-    if next_step_summary is not None:
+    if shortfall_text == "0" or required_amount_text == "0":
+        lines.append("Next Step: No additional funding required")
+    elif next_step_summary is not None:
         lines.append(f"Next Step: {next_step_summary}")
 
     return lines

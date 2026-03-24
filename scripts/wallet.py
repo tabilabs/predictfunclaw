@@ -244,6 +244,8 @@ def _handle_status(args: argparse.Namespace) -> int:
             f"Orchestration Vault Address: {payload.get('orchestrationVaultAddress')} ({payload.get('vaultAddressSource', 'unknown')})"
         )
         print(f"Manual Top-Up Guidance: {payload.get('manualTopUpGuidance')}")
+        for line in _overlay_human_next_steps(payload):
+            print(line)
     return 0
 
 
@@ -313,6 +315,8 @@ def _handle_deposit(args: argparse.Namespace) -> int:
             f"Orchestration Vault Address: {payload.get('orchestrationVaultAddress')} ({payload.get('vaultAddressSource', 'unknown')})"
         )
         print(f"Manual Top-Up Guidance: {payload.get('manualTopUpGuidance')}")
+        for line in _overlay_human_next_steps(payload):
+            print(line)
         print(f"Vault Exists: {'yes' if payload.get('vaultExists') else 'no'}")
         print("Accepted Assets: BNB, USDT")
         permission_summary = payload.get("permissionSummary")
@@ -345,6 +349,40 @@ def _handle_deposit(args: argparse.Namespace) -> int:
     print(f"BNB Balance (wei): {payload['bnbBalanceWei']}")
     print(f"USDT Balance (wei): {payload['usdtBalanceWei']}")
     return 0
+
+
+def _overlay_human_next_steps(payload: dict[str, Any]) -> list[str]:
+    orchestration = payload.get("fundingOrchestration")
+    if not isinstance(orchestration, dict):
+        return []
+
+    funding_target = orchestration.get("fundingTarget")
+    if not isinstance(funding_target, dict):
+        funding_target = {}
+
+    next_step = orchestration.get("fundingNextStep")
+    if not isinstance(next_step, dict):
+        next_step = {}
+    task = next_step.get("task")
+    if not isinstance(task, dict):
+        task = {}
+
+    lines: list[str] = []
+    current_balance = funding_target.get("currentBalanceRaw")
+    required_amount = funding_target.get("requiredAmountRaw")
+    shortfall = funding_target.get("fundingShortfallRaw")
+    next_step_summary = task.get("summary")
+
+    if current_balance is not None:
+        lines.append(f"Current USDT Balance: {current_balance}")
+    if required_amount is not None:
+        lines.append(f"Required Top-Up: {required_amount}")
+    if shortfall is not None:
+        lines.append(f"Shortfall: {shortfall}")
+    if next_step_summary is not None:
+        lines.append(f"Next Step: {next_step_summary}")
+
+    return lines
 
 
 def _handle_bootstrap_vault(args: argparse.Namespace) -> int:

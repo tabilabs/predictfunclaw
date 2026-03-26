@@ -377,7 +377,7 @@ pure `mandated-vault` 不提供 predict.fun trading parity。`wallet approve`、
 - `eoa` 必须配置 `PREDICT_EOA_PRIVATE_KEY`，并且不能混用 Predict Account 或 mandated-vault 输入。
 - `predict-account` 必须同时配置 `PREDICT_ACCOUNT_ADDRESS` 和 `PREDICT_PRIVY_PRIVATE_KEY`。
 - `mainnet` 必须配置 `PREDICT_API_KEY`。
-- pure `mandated-vault` 需要一个可用的 `ERC_MANDATED_MCP_COMMAND`；overlay 模式还需要 `ERC_MANDATED_VAULT_ASSET_ADDRESS` 与 `ERC_MANDATED_VAULT_AUTHORITY` 才能完成 funding orchestration。
+- pure `mandated-vault` 需要一个可用的 `ERC_MANDATED_MCP_COMMAND`；overlay 模式的默认路径是先提供显式 `ERC_MANDATED_VAULT_ADDRESS`，再由系统尽量自动解析 asset 与 authority，只有自动解析失败时才升级到手动字段。
 
 ## `ERC_MANDATED_MCP_COMMAND` / `@erc-mandated/mcp` 依赖说明
 

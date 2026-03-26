@@ -375,7 +375,7 @@ Pure `mandated-vault` does **not** provide predict.fun trading parity. `wallet a
 - `eoa` requires `PREDICT_EOA_PRIVATE_KEY` and rejects Predict Account or mandated-vault inputs.
 - `predict-account` requires both `PREDICT_ACCOUNT_ADDRESS` and `PREDICT_PRIVY_PRIVATE_KEY`.
 - `mainnet` requires `PREDICT_API_KEY`.
-- pure `mandated-vault` needs a working `ERC_MANDATED_MCP_COMMAND`; overlay mode also needs `ERC_MANDATED_VAULT_ASSET_ADDRESS` and `ERC_MANDATED_VAULT_AUTHORITY` for funding orchestration.
+- pure `mandated-vault` needs a working `ERC_MANDATED_MCP_COMMAND`; in overlay mode the default path is an explicit `ERC_MANDATED_VAULT_ADDRESS`, with asset and authority metadata resolved automatically where possible and only escalated to manual fields when that resolution fails.
 
 ## The mandated MCP dependency (`ERC_MANDATED_MCP_COMMAND`)
 

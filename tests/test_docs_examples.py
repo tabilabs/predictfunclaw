@@ -230,6 +230,10 @@ def test_docs_make_overlay_onboarding_vault_presence_first() -> None:
         assert "full derivation tuple" in text
         assert "primary first-step answer" in text or "default first step" in text
         assert "Only if automatic resolution fails" in text
+        assert (
+            "overlay mode also needs `ERC_MANDATED_VAULT_ASSET_ADDRESS` and `ERC_MANDATED_VAULT_AUTHORITY`"
+            not in text
+        )
 
     assert "你是否已经有 vault" in readme_zh
     assert "已有 vault" in readme_zh

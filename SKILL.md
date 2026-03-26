@@ -238,11 +238,16 @@ ERC_MANDATED_CONTRACT_VERSION=v0.3.0-agent-contract
 ERC_MANDATED_CHAIN_ID=56
 ```
 
+Ask first: **Do you already have a vault?**
+
+- **Have a vault** -> this is the default overlay path. Provide `ERC_MANDATED_VAULT_ADDRESS` and let PredictClaw resolve the remaining vault metadata where possible.
+- **Need a vault** -> deploy or redeploy a vault first with the pure `mandated-vault` bootstrap path, then return to overlay.
+
 Only if automatic resolution fails should you manually add advanced vault metadata such as `ERC_MANDATED_VAULT_ASSET_ADDRESS`, `ERC_MANDATED_VAULT_AUTHORITY`, or authority/executor private keys.
 
 In the overlay route, Predict Account remains the deposit/trading account while Vault funds the Predict Account through MCP-backed session and asset-transfer planning.
 
-If you do **not** have an explicit deployed vault address yet, keep the same Predict Account pair and replace `ERC_MANDATED_VAULT_ADDRESS` with the full derivation tuple: `ERC_MANDATED_FACTORY_ADDRESS`, `ERC_MANDATED_VAULT_ASSET_ADDRESS`, `ERC_MANDATED_VAULT_NAME`, `ERC_MANDATED_VAULT_SYMBOL`, `ERC_MANDATED_VAULT_AUTHORITY`, and `ERC_MANDATED_VAULT_SALT`.
+If you do **not** have a vault yet, the recommended answer is to deploy or redeploy one first with the pure `mandated-vault` bootstrap flow. The full derivation tuple (`ERC_MANDATED_FACTORY_ADDRESS`, `ERC_MANDATED_VAULT_ASSET_ADDRESS`, `ERC_MANDATED_VAULT_NAME`, `ERC_MANDATED_VAULT_SYMBOL`, `ERC_MANDATED_VAULT_AUTHORITY`, and `ERC_MANDATED_VAULT_SALT`) remains available as an advanced/manual path rather than the default first step.
 
 The optional `ERC_MANDATED_FUNDING_*` envs cap Vault→Predict transfers by per-tx amount, per-window cumulative amount, and window duration. On BSC mainnet USDT, `5U = 5000000000000000000` and `10U = 10000000000000000000`.
 
@@ -279,7 +284,7 @@ The optional `ERC_MANDATED_FUNDING_*` envs cap Vault→Predict transfers by per-
 - In `predict-account + ERC_MANDATED_*` overlay, `wallet status` / `wallet deposit` expose `manualTopUpAddress`, `tradingIdentityAddress`, `orchestrationVaultAddress`, and `vault-to-predict-account` funding semantics while Predict Account remains the trade identity.
 - Vault-related JSON also exposes `vaultAuthority`, `vaultExecutor`, `bootstrapSigner`, `allowedTokenAddresses`, and `allowedRecipients` so OpenClaw can reason about configured permissions.
 - Overlay `buy` can proceed when the Predict Account balance is sufficient; otherwise it returns deterministic `funding-required` guidance that points to `wallet deposit --json`.
-- Pure `mandated-vault` needs a working `ERC_MANDATED_MCP_COMMAND`; overlay mode also needs `ERC_MANDATED_VAULT_ASSET_ADDRESS` and `ERC_MANDATED_VAULT_AUTHORITY` for funding orchestration.
+- Pure `mandated-vault` needs a working `ERC_MANDATED_MCP_COMMAND`; in overlay mode the default path is an explicit `ERC_MANDATED_VAULT_ADDRESS`, with asset/authority metadata resolved automatically where possible and only escalated to manual fields when that resolution fails.
 - To detect whether the runtime is already available, run `cd {baseDir} && uv run python scripts/predictclaw.py setup mandated-mcp`.
 - The default path does not globally install packages and does not auto-edit `.env`.
 - Install the external `erc-mandated-mcp` runtime yourself, then set `ERC_MANDATED_MCP_COMMAND` manually.

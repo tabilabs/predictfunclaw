@@ -187,6 +187,34 @@ def test_docs_explain_first_install_bootstrap_layers() -> None:
     assert ".env.example" not in readme_zh
 
 
+def test_docs_explain_mode_first_minimum_field_onboarding() -> None:
+    predict_root = get_predict_root()
+    readme = (predict_root / "README.md").read_text()
+    skill = (predict_root / "SKILL.md").read_text()
+    readme_zh = (predict_root / "README.zh-CN.md").read_text()
+
+    for text in [readme, skill]:
+        assert "Choose the mode first" in text
+        assert "show only the minimum fields for that mode" in text
+        assert "predict-account + ERC_MANDATED_*" in text
+        assert (
+            "Recommended funded-trading path" in text
+            or "recommended funded-trading path" in text
+        )
+        assert (
+            "Recommended governance/control-plane path" in text
+            or "recommended governance/control-plane path" in text
+        )
+        assert (
+            "authority / executor / bootstrap" in text
+            or "authority/executor/bootstrap" in text
+        )
+
+    assert "先确定模式，再只填写该模式的最小字段集" in readme_zh
+    assert "mode-first 最小字段规则" in readme_zh
+    assert "authority / executor / bootstrap 私钥属于按需追加的高级字段" in readme_zh
+
+
 def test_docs_explain_predictclaw_version_source_of_truth() -> None:
     predict_root = get_predict_root()
     readme = (predict_root / "README.md").read_text()

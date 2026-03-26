@@ -46,6 +46,25 @@ If your OpenClaw host version injects environment variables into the skill proce
 
 The SKILL frontmatter metadata now declares the external runtime and conditionally used env surfaces so ClawHub users can review them before installation. The mode-specific requirements are still documented below and enforced by the runtime config validator; not every listed variable is required at the same time.
 
+## Mode-first onboarding
+
+Choose the mode first, then show only the minimum fields for that mode.
+
+- `read-only`
+  - Browsing only.
+  - Minimum fields: `PREDICT_ENV`, `PREDICT_WALLET_MODE`, and `PREDICT_API_KEY` for mainnet reads.
+- `eoa`
+  - Direct signer trading.
+  - Minimum fields: `PREDICT_ENV`, `PREDICT_WALLET_MODE=eoa`, `PREDICT_API_KEY`, `PREDICT_EOA_PRIVATE_KEY`.
+- `predict-account + ERC_MANDATED_*`
+  - Recommended funded-trading path.
+  - Minimum fields: `PREDICT_ENV`, `PREDICT_WALLET_MODE=predict-account`, `PREDICT_API_KEY`, `PREDICT_ACCOUNT_ADDRESS`, `PREDICT_PRIVY_PRIVATE_KEY`, `ERC_MANDATED_MCP_COMMAND`, `ERC_MANDATED_CHAIN_ID`, `ERC_MANDATED_VAULT_ADDRESS`, `ERC_MANDATED_VAULT_ASSET_ADDRESS`, `ERC_MANDATED_VAULT_AUTHORITY`, `ERC_MANDATED_CONTRACT_VERSION`.
+- pure `mandated-vault`
+  - Recommended governance/control-plane path.
+  - Minimum fields: `PREDICT_ENV`, `PREDICT_WALLET_MODE=mandated-vault`, `PREDICT_API_KEY`, `PREDICT_EOA_PRIVATE_KEY`, `ERC_MANDATED_MCP_COMMAND`, `ERC_MANDATED_CHAIN_ID`.
+
+Advanced authority / executor / bootstrap private keys are follow-up fields, not default first-screen requirements. Only surface them when the selected workflow really executes vault-side actions.
+
 ## Mode reminders
 
 1. Run `uv sync` in the installed skill directory.
@@ -91,6 +110,8 @@ The snippets below are `.env` examples. Put them in `{baseDir}/.env` or export t
 The installed skill directory `~/.openclaw/skills/predictclaw` remains the only canonical user config root; `{baseDir}` is just the manifest/example placeholder for that installed path.
 
 `OPENROUTER_API_KEY` appears in the signer examples only for optional `hedge scan` / `hedge analyze` usage. It is not required for market, wallet, or buy flows and is only needed for non-fixture hedge analysis.
+
+Do not lead with the full env matrix when a user only asks how to configure the skill. Ask for the mode first, then show only the minimum fields for that mode.
 
 ### bootstrap-safe fixture mode
 

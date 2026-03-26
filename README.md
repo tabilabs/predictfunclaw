@@ -68,6 +68,25 @@ If your OpenClaw host version injects environment variables into the skill proce
 
 The SKILL frontmatter metadata now declares the external runtime and conditionally used env surfaces so ClawHub users can review them before installation. The mode-specific requirements are still documented below and enforced by the runtime config validator; not every listed variable is required at the same time.
 
+## Mode-first onboarding (recommended)
+
+Choose the mode first, then fill only the minimum fields for that mode.
+
+- `read-only`
+  - Use for browsing only.
+  - Minimum fields: `PREDICT_ENV`, `PREDICT_WALLET_MODE`, `PREDICT_API_KEY` for mainnet reads.
+- `eoa`
+  - Use for direct signer trading without Predict Account overlay.
+  - Minimum fields: `PREDICT_ENV`, `PREDICT_WALLET_MODE=eoa`, `PREDICT_API_KEY`, `PREDICT_EOA_PRIVATE_KEY`.
+- `predict-account + ERC_MANDATED_*` (recommended funded-trading path)
+  - Use when Predict Account stays the trading identity and Vault may fund it.
+  - Minimum fields: `PREDICT_ENV`, `PREDICT_WALLET_MODE=predict-account`, `PREDICT_API_KEY`, `PREDICT_ACCOUNT_ADDRESS`, `PREDICT_PRIVY_PRIVATE_KEY`, `ERC_MANDATED_MCP_COMMAND`, `ERC_MANDATED_CHAIN_ID`, `ERC_MANDATED_VAULT_ADDRESS`, `ERC_MANDATED_VAULT_ASSET_ADDRESS`, `ERC_MANDATED_VAULT_AUTHORITY`, `ERC_MANDATED_CONTRACT_VERSION`.
+- pure `mandated-vault` (recommended governance/control-plane path)
+  - Use for bootstrap, governance, and vault-only control-plane workflows.
+  - Minimum fields: `PREDICT_ENV`, `PREDICT_WALLET_MODE=mandated-vault`, `PREDICT_API_KEY`, `PREDICT_EOA_PRIVATE_KEY`, `ERC_MANDATED_MCP_COMMAND`, `ERC_MANDATED_CHAIN_ID`.
+
+Advanced executor/authority/bootstrap private keys remain mode-specific follow-up inputs. Do not present them as day-one required fields unless the current workflow actually executes vault-side actions.
+
 ## First-time setup (recommended)
 
 1. Install the skill and run `uv sync`.
@@ -143,6 +162,10 @@ If mainnet reads fail with `401 unauthorized`, your `PREDICT_API_KEY` is missing
 ### D. Signer-backed flows
 
 wallet status requires signer configuration. `wallet status --json` is the right next step for `eoa` and `predict-account`, but it is not the first command to run in `read-only` mode.
+
+### E. Mode-first minimum field rule
+
+Do not paste the full env matrix first. Ask which mode the user is choosing, then show only the minimum fields for that mode. Add advanced authority/executor/bootstrap keys only when the selected flow actually needs vault-side execution.
 
 ## Configuration examples
 

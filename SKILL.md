@@ -50,11 +50,11 @@ The SKILL frontmatter metadata now declares the external runtime and conditional
 
 1. Run `uv sync` in the installed skill directory.
 2. Pick a bootstrap file:
-   - `template.env` -> secret-free local fixture bootstrap
-   - `template.readonly.env` -> live read-only market reads
-   - `template.eoa.env` -> direct private-key trading
-   - `template.predict-account.env` -> Predict Account trading
-   - `template.mandated-vault.env` -> advanced vault control-plane / overlay
+    - `template.env` -> secret-free local fixture bootstrap
+    - `template.readonly.env` -> live read-only market reads
+    - `template.eoa.env` -> direct private-key trading
+    - `template.predict-account.env` -> recommended funded-trading path (Predict Account trades, Vault can fund it)
+    - `template.mandated-vault.env` -> recommended governance/control-plane path for advanced pure vault workflows
 3. Copy the chosen file to `.env` inside `~/.openclaw/skills/predictclaw/`.
 4. Fill only the variables required for that mode.
 5. Verify with:
@@ -69,6 +69,13 @@ cd {baseDir} && uv run python scripts/predictclaw.py markets trending
 mainnet market reads require PREDICT_API_KEY. Non-mainnet usage remains explicit-only and is no longer the packaged default.
 
 `test-fixture` only knows the bundled local market IDs (`123`, `456`, `789`, `101`, `202`). Switch to the live read-only template before querying a real production market ID.
+
+## Recommended operating model
+
+- For user-facing funded trading, recommend `predict-account + ERC_MANDATED_*`.
+- In that model, Predict Account remains the trading identity and deposit address, while Vault acts as the funding/control plane.
+- For governance-first or bootstrap-only workflows, recommend pure `mandated-vault` instead.
+- Do not present pure `mandated-vault` as a co-equal default for trading because it still fails closed on buy / positions / hedge flows.
 
 For signer-backed modes, the next verification step is:
 

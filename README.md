@@ -72,11 +72,11 @@ The SKILL frontmatter metadata now declares the external runtime and conditional
 
 1. Install the skill and run `uv sync`.
 2. Pick a bootstrap file:
-   - `template.env` -> secret-free local fixture bootstrap
-   - `template.readonly.env` -> live read-only market reads
-   - `template.eoa.env` -> direct private-key trading
-   - `template.predict-account.env` -> Predict Account trading
-   - `template.mandated-vault.env` -> advanced pure vault control-plane bootstrap
+    - `template.env` -> secret-free local fixture bootstrap
+    - `template.readonly.env` -> live read-only market reads
+    - `template.eoa.env` -> direct private-key trading
+    - `template.predict-account.env` -> recommended funded-trading path (Predict Account trades, Vault can fund it)
+    - `template.mandated-vault.env` -> recommended governance/control-plane path for advanced vault-only workflows
 3. Copy the chosen template to `.env` inside `~/.openclaw/skills/predictclaw/`.
 4. Fill only the variables required for that mode.
 5. Verify the install with `uv run python scripts/predictclaw.py --help`.
@@ -99,8 +99,15 @@ If you want Vault funding without changing the trading identity, start from `tem
 - `template.env` -> safest first install; uses `test-fixture` + `read-only` so the CLI can start without secrets or network access
 - `template.readonly.env` -> live market reads; mainnet market reads require PREDICT_API_KEY
 - `template.eoa.env` -> EOA signer flow, pinned to mainnet with `https://api.predict.fun`
-- `template.predict-account.env` -> Predict Account signer flow, pinned to mainnet with `https://api.predict.fun`
-- `template.mandated-vault.env` -> advanced explicit opt-in template for pure vault control-plane usage
+- `template.predict-account.env` -> recommended funded-trading template; use this when Predict Account remains the trading identity and Vault may fund it
+- `template.mandated-vault.env` -> recommended governance/control-plane template for advanced pure vault workflows
+
+### Recommended operating model
+
+- For user-facing funded trading, recommend `predict-account + ERC_MANDATED_*`.
+- In that model, Predict Account remains the trading identity and deposit address, while Vault acts as the funding/control plane.
+- For governance-first or bootstrap-only workflows, recommend pure `mandated-vault` instead.
+- Do not present pure `mandated-vault` as a co-equal default for trading because it still fails closed on buy / positions / hedge flows.
 
 ## Real first-install paths
 

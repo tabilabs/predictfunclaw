@@ -72,11 +72,11 @@ SKILL frontmatter 的 metadata 现在会把外部 runtime 和条件性使用的 
 
 1. 安装 skill 并执行 `uv sync`。
 2. 先选择一个启动模板：
-   - `template.env` -> 无 secret 的本地 fixture 启动
-   - `template.readonly.env` -> live 只读市场读取
-   - `template.eoa.env` -> 直接私钥交易
-   - `template.predict-account.env` -> Predict Account 交易
-   - `template.mandated-vault.env` -> 高级 pure vault control-plane bootstrap
+    - `template.env` -> 无 secret 的本地 fixture 启动
+    - `template.readonly.env` -> live 只读市场读取
+    - `template.eoa.env` -> 直接私钥交易
+    - `template.predict-account.env` -> 推荐的带资金交易路径（Predict Account 交易，Vault 可供资）
+    - `template.mandated-vault.env` -> 推荐的治理 / control-plane 路径，适合高级 pure vault 工作流
 3. 在 `~/.openclaw/skills/predictclaw/` 中把选中的模板复制为 `.env`。
 4. 只填写该模式需要的最小变量集。
 5. 先用 `uv run python scripts/predictclaw.py --help` 确认安装无误。
@@ -99,8 +99,15 @@ SKILL frontmatter 的 metadata 现在会把外部 runtime 和条件性使用的 
 - `template.env` -> 最安全的首装入口；使用 `test-fixture` + `read-only`，不需要 secrets，也不会访问网络
 - `template.readonly.env` -> live 市场读取；mainnet 的市场读取需要 PREDICT_API_KEY
 - `template.eoa.env` -> EOA signer 路线，固定走主网 `https://api.predict.fun`
-- `template.predict-account.env` -> Predict Account signer 路线，固定走主网 `https://api.predict.fun`
-- `template.mandated-vault.env` -> 高级显式 opt-in 的 pure vault control-plane 模板
+- `template.predict-account.env` -> 推荐的带资金交易模板；当 Predict Account 仍是交易身份、Vault 可能参与供资时使用
+- `template.mandated-vault.env` -> 推荐的治理 / control-plane 模板，适合高级 pure vault 工作流
+
+### 推荐的运行模型
+
+- 面向用户的带资金交易，主推 `predict-account + ERC_MANDATED_*`。
+- 在这个模型里，Predict Account 仍然是交易身份和充值地址，Vault 只承担资金 / control-plane 角色。
+- 面向治理优先或 bootstrap-only 的工作流，再推荐 pure `mandated-vault`。
+- 不要把 pure `mandated-vault` 当作交易默认模式，因为它在 buy / positions / hedge 等流上仍然 fail closed。
 
 ## 真实首装路径
 

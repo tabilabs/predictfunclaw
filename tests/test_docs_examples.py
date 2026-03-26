@@ -145,16 +145,15 @@ def test_docs_explain_flat_metadata_vs_mode_specific_runtime_requirements() -> N
     readme_zh = (predict_root / "README.zh-CN.md").read_text()
 
     for text in [readme, skill]:
-        assert "metadata intentionally lists only the universal entry variables" in text
-        assert "OpenClaw's runtime metadata is flat rather than mode-aware" in text
         assert (
-            "mode-specific requirements are documented below and enforced by the runtime config validator"
-            in text
+            "declares the external runtime and conditionally used env surfaces" in text
         )
+        assert "not every listed variable is required at the same time" in text
+        assert "runtime config validator" in text
 
-    assert "metadata 里故意只声明通用入口变量" in readme_zh
-    assert "OpenClaw 当前的 runtime metadata 是扁平的，不是按 mode 感知的" in readme_zh
-    assert "各模式自己的必填项以下面的示例和运行时配置校验为准" in readme_zh
+    assert "外部 runtime 和条件性使用的 env 面暴露出来" in readme_zh
+    assert "并不代表必须一次性全部填写" in readme_zh
+    assert "运行时配置校验为准" in readme_zh
 
 
 def test_docs_explain_first_install_bootstrap_layers() -> None:

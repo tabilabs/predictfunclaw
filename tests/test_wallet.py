@@ -24,6 +24,7 @@ from lib.mandated_mcp_bridge import (
     VaultHealthCheckResult,
 )
 from lib.session_storage import FundAndActionSessionRecord, SessionStorage
+import lib.wallet_manager as wallet_manager_module
 from lib.wallet_manager import (
     ApprovalSnapshot,
     MANDATED_FUNDING_TRANSFER_MAX_CUMULATIVE_DRAWDOWN_BPS,
@@ -1037,6 +1038,66 @@ def test_wallet_status_uses_stored_overlay_session_binding(tmp_path) -> None:
     assert binding["positionId"] == "pos-123-yes"
 
 
+def test_wallet_status_overlay_can_resolve_asset_and_authority_from_vault_address(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = PredictConfig.from_env(
+        {
+            "PREDICT_ENV": "testnet",
+            "PREDICT_STORAGE_DIR": "/tmp/predict",
+            "PREDICT_WALLET_MODE": "predict-account",
+            "PREDICT_ACCOUNT_ADDRESS": "0x1234567890123456789012345678901234567890",
+            "PREDICT_PRIVY_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
+            "ERC_MANDATED_VAULT_ADDRESS": "0x2222222222222222222222222222222222222222",
+            "ERC_MANDATED_CHAIN_ID": "56",
+        }
+    )
+    bridge = FakeMandatedBridge(
+        health_result=VaultHealthCheckResult(
+            blockNumber=101,
+            vault="0x2222222222222222222222222222222222222222",
+            mandateAuthority="0x5555555555555555555555555555555555555555",
+            authorityEpoch="7",
+            pendingAuthority="0x0000000000000000000000000000000000000000",
+            nonceThreshold="2",
+            totalAssets="123000000000000000000",
+        )
+    )
+
+    monkeypatch.setattr(
+        wallet_manager_module,
+        "resolve_overlay_vault_runtime_metadata",
+        lambda *args, **kwargs: {
+            "vaultAuthority": "0x5555555555555555555555555555555555555555",
+            "vaultAssetAddress": "0x4444444444444444444444444444444444444444",
+        },
+        raising=False,
+    )
+
+    manager = WalletManager(
+        config,
+        sdk_factory=lambda _config: FakeWalletSdk(
+            wallet_mode=WalletMode.PREDICT_ACCOUNT,
+            wallet_signer_address="0x7777777777777777777777777777777777777777",
+            wallet_funding_address="0x1234567890123456789012345678901234567890",
+        ),
+        bridge_factory=lambda _config: bridge,
+    )
+
+    payload = manager.get_status().to_dict()
+
+    assert payload["activeRoute"] == "vault-to-predict-account"
+    assert payload["vaultAddress"] == "0x2222222222222222222222222222222222222222"
+    permission_summary = cast(dict[str, Any], payload["permissionSummary"])
+    assert (
+        permission_summary["vaultAuthority"]
+        == "0x5555555555555555555555555555555555555555"
+    )
+    assert permission_summary["allowedTokenAddresses"] == [
+        "0x4444444444444444444444444444444444444444"
+    ]
+
+
 def test_wallet_status_predict_account_overlay_reads_balances_outside_event_loop() -> (
     None
 ):
@@ -1084,7 +1145,7 @@ def test_wallet_status_predict_account_overlay_reads_balances_outside_event_loop
     assert payload["usdtBalanceWei"] == 30_000_000_000_000_000_000
 
 
-def test_wallet_status_predict_account_overlay_treats_empty_contract_reads_as_undeployed() -> (
+def test_wallet_status_predict_account_overlay_requires_bootstrap_when_vault_is_undeployed() -> (
     None
 ):
     config = PredictConfig.from_env(
@@ -1118,11 +1179,12 @@ def test_wallet_status_predict_account_overlay_treats_empty_contract_reads_as_un
         bridge_factory=lambda _config: bridge,
     )
 
-    payload = manager.get_status().to_dict()
+    with pytest.raises(ConfigError) as error:
+        manager.get_status()
 
-    assert payload["fundingRoute"] == "vault-to-predict-account"
-    assert payload["vaultAddress"] == "0x2222222222222222222222222222222222222222"
-    assert payload["vaultExists"] is False
+    message = str(error.value)
+    assert "predict-account + vault overlay needs a deployed vault first" in message
+    assert "deploy or redeploy a vault" in message.lower()
 
 
 def test_wallet_status_predict_account_overlay_computes_dynamic_adapter_root() -> None:

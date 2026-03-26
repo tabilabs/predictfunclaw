@@ -58,12 +58,15 @@ Choose the mode first, then show only the minimum fields for that mode.
   - Minimum fields: `PREDICT_ENV`, `PREDICT_WALLET_MODE=eoa`, `PREDICT_API_KEY`, `PREDICT_EOA_PRIVATE_KEY`.
 - `predict-account + ERC_MANDATED_*`
   - Recommended funded-trading path.
-  - Minimum fields: `PREDICT_ENV`, `PREDICT_WALLET_MODE=predict-account`, `PREDICT_API_KEY`, `PREDICT_ACCOUNT_ADDRESS`, `PREDICT_PRIVY_PRIVATE_KEY`, `ERC_MANDATED_MCP_COMMAND`, `ERC_MANDATED_CHAIN_ID`, `ERC_MANDATED_VAULT_ADDRESS`, `ERC_MANDATED_VAULT_ASSET_ADDRESS`, `ERC_MANDATED_VAULT_AUTHORITY`, `ERC_MANDATED_CONTRACT_VERSION`.
+  - Ask first: **Do you already have a vault?**
+  - **Have a vault** -> minimum fields: `PREDICT_ENV`, `PREDICT_WALLET_MODE=predict-account`, `PREDICT_API_KEY`, `PREDICT_ACCOUNT_ADDRESS`, `PREDICT_PRIVY_PRIVATE_KEY`, `ERC_MANDATED_MCP_COMMAND`, `ERC_MANDATED_CHAIN_ID`, `ERC_MANDATED_VAULT_ADDRESS`, optional `ERC_MANDATED_CONTRACT_VERSION`.
+  - **Need a vault** -> deploy or redeploy a vault first with the pure `mandated-vault` bootstrap path, then return to overlay.
 - pure `mandated-vault`
   - Recommended governance/control-plane path.
   - Minimum fields: `PREDICT_ENV`, `PREDICT_WALLET_MODE=mandated-vault`, `PREDICT_API_KEY`, `PREDICT_EOA_PRIVATE_KEY`, `ERC_MANDATED_MCP_COMMAND`, `ERC_MANDATED_CHAIN_ID`.
 
 Advanced authority / executor / bootstrap private keys are follow-up fields, not default first-screen requirements. Only surface them when the selected workflow really executes vault-side actions.
+Do not treat the full derivation tuple as the primary first-step answer for overlay onboarding when the user already has a deployed vault.
 
 ## Mode reminders
 
@@ -95,6 +98,7 @@ mainnet market reads require PREDICT_API_KEY. Non-mainnet usage remains explicit
 - In that model, Predict Account remains the trading identity and deposit address, while Vault acts as the funding/control plane.
 - For governance-first or bootstrap-only workflows, recommend pure `mandated-vault` instead.
 - Do not present pure `mandated-vault` as a co-equal default for trading because it still fails closed on buy / positions / hedge flows.
+- For overlay onboarding, ask whether the user already has a vault before asking for advanced vault metadata.
 
 For signer-backed modes, the next verification step is:
 

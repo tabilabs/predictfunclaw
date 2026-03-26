@@ -515,6 +515,14 @@ class FundingService:
                     current_usdt_balance_wei=usdt_balance,
                     wallet_sdk=sdk,
                 )
+                resolved_authority = cast(
+                    str | None,
+                    orchestration.account_context.get("authority"),
+                )
+                resolved_asset = cast(
+                    str | None,
+                    orchestration.funding_target.get("tokenAddress"),
+                )
                 session_record = SessionStorage(
                     self._config.storage_dir
                 ).get_active_session(predict_account_address=sdk.funding_address)
@@ -551,6 +559,8 @@ class FundingService:
                     permission_summary=_build_mandated_permission_summary(
                         self._config,
                         permission_model="vault-to-predict-account-overlay",
+                        vault_authority=resolved_authority,
+                        underlying_asset=resolved_asset,
                         allowed_token_addresses=cast(
                             list[str] | None,
                             orchestration.funding_policy.get("allowedTokenAddresses"),

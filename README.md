@@ -80,12 +80,15 @@ Choose the mode first, then fill only the minimum fields for that mode.
   - Minimum fields: `PREDICT_ENV`, `PREDICT_WALLET_MODE=eoa`, `PREDICT_API_KEY`, `PREDICT_EOA_PRIVATE_KEY`.
 - `predict-account + ERC_MANDATED_*` (recommended funded-trading path)
   - Use when Predict Account stays the trading identity and Vault may fund it.
-  - Minimum fields: `PREDICT_ENV`, `PREDICT_WALLET_MODE=predict-account`, `PREDICT_API_KEY`, `PREDICT_ACCOUNT_ADDRESS`, `PREDICT_PRIVY_PRIVATE_KEY`, `ERC_MANDATED_MCP_COMMAND`, `ERC_MANDATED_CHAIN_ID`, `ERC_MANDATED_VAULT_ADDRESS`, `ERC_MANDATED_VAULT_ASSET_ADDRESS`, `ERC_MANDATED_VAULT_AUTHORITY`, `ERC_MANDATED_CONTRACT_VERSION`.
+  - Ask first: **Do you already have a vault?**
+  - **Have a vault** -> minimum fields: `PREDICT_ENV`, `PREDICT_WALLET_MODE=predict-account`, `PREDICT_API_KEY`, `PREDICT_ACCOUNT_ADDRESS`, `PREDICT_PRIVY_PRIVATE_KEY`, `ERC_MANDATED_MCP_COMMAND`, `ERC_MANDATED_CHAIN_ID`, `ERC_MANDATED_VAULT_ADDRESS`, optional `ERC_MANDATED_CONTRACT_VERSION`.
+  - **Need a vault** -> deploy or redeploy a vault first with the pure `mandated-vault` bootstrap flow, then come back to overlay.
 - pure `mandated-vault` (recommended governance/control-plane path)
   - Use for bootstrap, governance, and vault-only control-plane workflows.
   - Minimum fields: `PREDICT_ENV`, `PREDICT_WALLET_MODE=mandated-vault`, `PREDICT_API_KEY`, `PREDICT_EOA_PRIVATE_KEY`, `ERC_MANDATED_MCP_COMMAND`, `ERC_MANDATED_CHAIN_ID`.
 
 Advanced executor/authority/bootstrap private keys remain mode-specific follow-up inputs. Do not present them as day-one required fields unless the current workflow actually executes vault-side actions.
+Do not treat the full derivation tuple as the primary first-step answer for overlay onboarding when the user already has a deployed vault.
 
 ## First-time setup (recommended)
 
@@ -113,12 +116,19 @@ Advanced executor/authority/bootstrap private keys remain mode-specific follow-u
 
 If you want Vault funding without changing the trading identity, start from `template.predict-account.env`, use `PREDICT_WALLET_MODE=predict-account`, and treat that as the default answer for the "keep the official trading identity, let Vault fund it" workflow. Do not start from pure `wallet bootstrap-vault` unless you are creating a new vault or working on the control plane directly.
 
+For overlay onboarding, ask the vault question first:
+
+- **Have a vault** -> provide `ERC_MANDATED_VAULT_ADDRESS`, then let PredictClaw resolve or validate the remaining vault metadata where possible.
+- **Need a vault** -> deploy or redeploy a vault first with the pure `mandated-vault` bootstrap flow.
+
+Do not treat the full derivation tuple as the primary first-step answer for overlay onboarding unless the user is explicitly on the advanced/manual recovery path.
+
 ## Bootstrap templates
 
 - `template.env` -> safest first install; uses `test-fixture` + `read-only` so the CLI can start without secrets or network access
 - `template.readonly.env` -> live market reads; mainnet market reads require PREDICT_API_KEY
 - `template.eoa.env` -> EOA signer flow, pinned to mainnet with `https://api.predict.fun`
-- `template.predict-account.env` -> recommended funded-trading template; use this when Predict Account remains the trading identity and Vault may fund it
+- `template.predict-account.env` -> recommended funded-trading template; use this when Predict Account remains the trading identity and Vault may fund it. If you already have a vault, start from its address. If you do not, bootstrap one first.
 - `template.mandated-vault.env` -> recommended governance/control-plane template for advanced pure vault workflows
 
 ### Recommended operating model
@@ -307,7 +317,9 @@ ERC_MANDATED_CONTRACT_VERSION=v0.3.0-agent-contract
 ERC_MANDATED_CHAIN_ID=56
 ```
 
-If you do **not** have an explicit deployed vault address yet, keep the same Predict Account pair and replace `ERC_MANDATED_VAULT_ADDRESS` with the full derivation tuple: `ERC_MANDATED_FACTORY_ADDRESS`, `ERC_MANDATED_VAULT_ASSET_ADDRESS`, `ERC_MANDATED_VAULT_NAME`, `ERC_MANDATED_VAULT_SYMBOL`, `ERC_MANDATED_VAULT_AUTHORITY`, and `ERC_MANDATED_VAULT_SALT`.
+If you already have a deployed vault, this is the primary overlay path: provide `ERC_MANDATED_VAULT_ADDRESS` and let PredictClaw resolve the remaining vault metadata where possible.
+
+If you do **not** have a vault yet, the recommended answer is to deploy or redeploy one first with the pure `mandated-vault` bootstrap flow. The full derivation tuple (`ERC_MANDATED_FACTORY_ADDRESS`, `ERC_MANDATED_VAULT_ASSET_ADDRESS`, `ERC_MANDATED_VAULT_NAME`, `ERC_MANDATED_VAULT_SYMBOL`, `ERC_MANDATED_VAULT_AUTHORITY`, and `ERC_MANDATED_VAULT_SALT`) remains available as an advanced/manual path rather than the default first step.
 
 Optional overlay caps:
 

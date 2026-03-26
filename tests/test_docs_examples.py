@@ -215,6 +215,28 @@ def test_docs_explain_mode_first_minimum_field_onboarding() -> None:
     assert "authority / executor / bootstrap 私钥属于按需追加的高级字段" in readme_zh
 
 
+def test_docs_make_overlay_onboarding_vault_presence_first() -> None:
+    predict_root = get_predict_root()
+    readme = (predict_root / "README.md").read_text()
+    skill = (predict_root / "SKILL.md").read_text()
+    readme_zh = (predict_root / "README.zh-CN.md").read_text()
+
+    for text in [readme, skill]:
+        assert "Do you already have a vault?" in text
+        assert "Have a vault" in text
+        assert "Need a vault" in text
+        assert "deploy or redeploy a vault first" in text
+        assert "ERC_MANDATED_VAULT_ADDRESS" in text
+        assert "full derivation tuple" in text
+        assert "primary first-step answer" in text or "default first step" in text
+
+    assert "你是否已经有 vault" in readme_zh
+    assert "已有 vault" in readme_zh
+    assert "还没有 vault" in readme_zh
+    assert "部署或重建 vault" in readme_zh
+    assert "不要把完整 derivation tuple 当成 overlay 的第一屏默认答案" in readme_zh
+
+
 def test_docs_explain_predictclaw_version_source_of_truth() -> None:
     predict_root = get_predict_root()
     readme = (predict_root / "README.md").read_text()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Callable, Mapping, Protocol, cast
@@ -31,6 +32,25 @@ from .mandated_mcp_bridge import (
     VaultHealthCheckResult,
 )
 from .session_storage import SessionStorage
+
+
+OVERLAY_RPC_ENV_CANDIDATES = {
+    56: ("BSC_MAINNET_RPC_URL", "BSC_RPC_URL", "ERC_MANDATED_RPC_URL"),
+    97: ("BSC_TESTNET_RPC_URL", "BSC_RPC_URL", "ERC_MANDATED_RPC_URL"),
+}
+OVERLAY_PUBLIC_RPC_FALLBACKS = {
+    56: "https://bsc-dataseed.bnbchain.org/",
+    97: "https://data-seed-prebsc-1-s1.bnbchain.org:8545/",
+}
+ERC4626_ASSET_ABI = [
+    {
+        "stateMutability": "view",
+        "type": "function",
+        "name": "asset",
+        "inputs": [],
+        "outputs": [{"name": "", "type": "address"}],
+    }
+]
 
 
 @dataclass
@@ -809,6 +829,58 @@ def _selected_mandated_chain_name(config: PredictConfig) -> str:
     return "BNB Mainnet" if _selected_mandated_chain_id(config) == 56 else "BNB Testnet"
 
 
+def _resolve_overlay_rpc_url(config: PredictConfig) -> str:
+    chain_id = _selected_mandated_chain_id(config)
+    for env_name in OVERLAY_RPC_ENV_CANDIDATES.get(chain_id, ("ERC_MANDATED_RPC_URL",)):
+        value = os.environ.get(env_name)
+        if value:
+            return value
+    fallback = OVERLAY_PUBLIC_RPC_FALLBACKS.get(chain_id)
+    if fallback:
+        return fallback
+    raise ConfigError(f"No RPC URL configured for chainId {chain_id}.")
+
+
+def _load_explicit_vault_asset_address(
+    config: PredictConfig, vault_address: str
+) -> str:
+    rpc_url = _resolve_overlay_rpc_url(config)
+    web3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={"timeout": 20}))
+    checksum_vault = Web3.to_checksum_address(vault_address)
+    vault_contract = web3.eth.contract(address=checksum_vault, abi=ERC4626_ASSET_ABI)
+    asset = vault_contract.functions.asset().call()
+    return Web3.to_checksum_address(cast(str, asset))
+
+
+def resolve_overlay_vault_runtime_metadata(
+    config: PredictConfig,
+    resolution: "MandatedVaultResolution",
+) -> dict[str, str]:
+    authority = config.mandated_vault_authority
+    if authority is None and resolution.vault_health is not None:
+        authority = resolution.vault_health.mandateAuthority
+
+    asset_address = config.mandated_vault_asset_address
+    if asset_address is None and resolution.vault_deployed:
+        asset_address = _load_explicit_vault_asset_address(
+            config, resolution.vault_address
+        )
+
+    if not resolution.vault_deployed:
+        raise ConfigError(
+            "predict-account + vault overlay needs a deployed vault first. Deploy or redeploy a vault with the pure mandated-vault bootstrap flow before using the overlay path."
+        )
+    if authority is None or asset_address is None:
+        raise ConfigError(
+            "predict-account + vault overlay could not resolve vault metadata from the configured vault. Deploy or redeploy a vault first, or provide the advanced manual vault metadata."
+        )
+
+    return {
+        "vaultAuthority": authority,
+        "vaultAssetAddress": asset_address,
+    }
+
+
 def _bootstrap_tx_summary(
     bootstrap: VaultBootstrapResult,
 ) -> dict[str, object] | None:
@@ -925,6 +997,8 @@ def _build_mandated_permission_summary(
     config: PredictConfig,
     *,
     permission_model: str,
+    vault_authority: str | None = None,
+    underlying_asset: str | None = None,
     allowed_token_addresses: list[str] | None = None,
     allowed_recipients: list[str] | None = None,
     max_amount_per_tx: str | None = None,
@@ -950,12 +1024,15 @@ def _build_mandated_permission_summary(
         )
     return VaultPermissionSummary(
         permission_model=permission_model,
-        vault_authority=config.mandated_vault_authority,
+        vault_authority=vault_authority or config.mandated_vault_authority,
         vault_executor=config.mandated_executor_address,
         bootstrap_signer=config.mandated_bootstrap_signer_address,
-        underlying_asset=str(config.mandated_vault_asset_address)
-        if config.mandated_vault_asset_address
-        else None,
+        underlying_asset=underlying_asset
+        or (
+            str(config.mandated_vault_asset_address)
+            if config.mandated_vault_asset_address
+            else None
+        ),
         share_token=share_token,
         allowed_token_addresses=allowed_token_addresses,
         allowed_recipients=allowed_recipients,
@@ -1116,30 +1193,24 @@ async def build_vault_to_predict_account_orchestration(
     current_usdt_balance_wei: int,
     wallet_sdk: Any | None = None,
 ) -> VaultToPredictAccountFundingOrchestration:
-    if not config.mandated_vault_authority:
-        raise ConfigError(
-            "predict-account + vault overlay requires ERC_MANDATED_VAULT_AUTHORITY for funding orchestration."
-        )
-    if not config.mandated_vault_asset_address:
-        raise ConfigError(
-            "predict-account + vault overlay requires ERC_MANDATED_VAULT_ASSET_ADDRESS for funding orchestration."
-        )
-
     resolution = await resolve_mandated_vault(
         config, bridge, include_create_prepare=False
     )
+    metadata = resolve_overlay_vault_runtime_metadata(config, resolution)
+    resolved_authority = metadata["vaultAuthority"]
+    resolved_asset_address = metadata["vaultAssetAddress"]
     timestamp = (
         datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     )
     agent_id = f"predict-account:{predict_account_address.lower()}"
     policy_id = f"vault-to-predict-account:{predict_account_address.lower()}"
-    funding_executor_address = config.mandated_executor_address
+    funding_executor_address = config.mandated_executor_address or resolved_authority
     if not funding_executor_address:
         raise ConfigError(
             "predict-account + vault overlay requires an authorized funding executor address."
         )
     allowed_adapters_root = _resolve_transfer_allowed_adapters_root(
-        token_address=str(config.mandated_vault_asset_address),
+        token_address=resolved_asset_address,
         wallet_sdk=wallet_sdk,
         fallback_root=config.mandated_allowed_adapters_root,
     )
@@ -1154,7 +1225,7 @@ async def build_vault_to_predict_account_orchestration(
     context_result = await bridge.create_agent_account_context(
         agent_id=agent_id,
         vault=resolution.vault_address,
-        authority=config.mandated_vault_authority,
+        authority=resolved_authority,
         executor=funding_executor_address,
         funding_policy_ref=policy_id,
         defaults=dict(mandate_defaults),
@@ -1169,7 +1240,7 @@ async def build_vault_to_predict_account_orchestration(
 
     policy_result = await bridge.create_agent_funding_policy(
         policy_id=policy_id,
-        allowed_token_addresses=[config.mandated_vault_asset_address],
+        allowed_token_addresses=[resolved_asset_address],
         allowed_recipients=[predict_account_address],
         max_amount_per_tx=config.mandated_funding_max_amount_per_tx,
         max_amount_per_window=config.mandated_funding_max_amount_per_window,
@@ -1191,7 +1262,7 @@ async def build_vault_to_predict_account_orchestration(
     funding_target = {
         "label": "predict-account-usdt",
         "recipient": predict_account_address,
-        "tokenAddress": config.mandated_vault_asset_address,
+        "tokenAddress": resolved_asset_address,
         "requiredAmountRaw": required_amount_raw,
         "currentBalanceRaw": str(max(current_usdt_balance_wei, 0)),
         "balanceSnapshot": {
@@ -1407,6 +1478,14 @@ class WalletManager:
                     current_usdt_balance_wei=usdt_balance,
                     wallet_sdk=sdk,
                 )
+                resolved_authority = cast(
+                    str | None,
+                    orchestration.account_context.get("authority"),
+                )
+                resolved_asset = cast(
+                    str | None,
+                    orchestration.funding_target.get("tokenAddress"),
+                )
                 session_record = SessionStorage(
                     self._config.storage_dir
                 ).get_active_session(predict_account_address=sdk.funding_address)
@@ -1444,6 +1523,8 @@ class WalletManager:
                     permission_summary=_build_mandated_permission_summary(
                         self._config,
                         permission_model="vault-to-predict-account-overlay",
+                        vault_authority=resolved_authority,
+                        underlying_asset=resolved_asset,
                         allowed_token_addresses=cast(
                             list[str] | None,
                             orchestration.funding_policy.get("allowedTokenAddresses"),

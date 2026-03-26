@@ -229,12 +229,14 @@ def test_docs_make_overlay_onboarding_vault_presence_first() -> None:
         assert "ERC_MANDATED_VAULT_ADDRESS" in text
         assert "full derivation tuple" in text
         assert "primary first-step answer" in text or "default first step" in text
+        assert "Only if automatic resolution fails" in text
 
     assert "你是否已经有 vault" in readme_zh
     assert "已有 vault" in readme_zh
     assert "还没有 vault" in readme_zh
     assert "部署或重建 vault" in readme_zh
     assert "不要把完整 derivation tuple 当成 overlay 的第一屏默认答案" in readme_zh
+    assert "只有在自动解析失败时" in readme_zh
 
 
 def test_docs_explain_predictclaw_version_source_of_truth() -> None:

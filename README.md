@@ -309,9 +309,6 @@ PREDICT_WALLET_MODE=predict-account
 PREDICT_ACCOUNT_ADDRESS=0xYOUR_PREDICT_ACCOUNT
 PREDICT_PRIVY_PRIVATE_KEY=0xYOUR_PRIVY_EXPORTED_KEY
 ERC_MANDATED_VAULT_ADDRESS=0xYOUR_DEPLOYED_VAULT
-ERC_MANDATED_VAULT_ASSET_ADDRESS=0xYOUR_ASSET
-ERC_MANDATED_VAULT_AUTHORITY=0xYOUR_AUTHORITY
-ERC_MANDATED_AUTHORITY_PRIVATE_KEY=0xYOUR_VAULT_AUTHORITY_KEY
 ERC_MANDATED_MCP_COMMAND=erc-mandated-mcp
 ERC_MANDATED_CONTRACT_VERSION=v0.3.0-agent-contract
 ERC_MANDATED_CHAIN_ID=56
@@ -320,6 +317,8 @@ ERC_MANDATED_CHAIN_ID=56
 If you already have a deployed vault, this is the primary overlay path: provide `ERC_MANDATED_VAULT_ADDRESS` and let PredictClaw resolve the remaining vault metadata where possible.
 
 If you do **not** have a vault yet, the recommended answer is to deploy or redeploy one first with the pure `mandated-vault` bootstrap flow. The full derivation tuple (`ERC_MANDATED_FACTORY_ADDRESS`, `ERC_MANDATED_VAULT_ASSET_ADDRESS`, `ERC_MANDATED_VAULT_NAME`, `ERC_MANDATED_VAULT_SYMBOL`, `ERC_MANDATED_VAULT_AUTHORITY`, and `ERC_MANDATED_VAULT_SALT`) remains available as an advanced/manual path rather than the default first step.
+
+Only if automatic resolution fails should you manually add advanced vault metadata such as `ERC_MANDATED_VAULT_ASSET_ADDRESS`, `ERC_MANDATED_VAULT_AUTHORITY`, or authority/executor private keys.
 
 Optional overlay caps:
 

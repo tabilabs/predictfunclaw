@@ -361,9 +361,9 @@ This is the default route for the Predict Account trading-identity workflow. It 
 
 `mandated-vault` is an advanced explicit opt-in mode. Treat it as a separate control-plane path, not a co-equal answer for Predict Account trading.
 
-Bundled factory defaults and post-success `.env` backfill make pure bootstrap more convenient, but they do not replace deployment-time signer inputs or the overlay-specific env required by the `predict-account` funding route.
+Bundled factory defaults and the returned manual env block make pure bootstrap more convenient, but they do not replace deployment-time signer inputs or the overlay-specific env required by the `predict-account` funding route.
 
-For the default pure bootstrap flow, users only need an EOA signer, deployment-fee funding, and any optional amount caps. PredictClaw handles the product-configured factory, previews before broadcast, requires explicit confirmation, and backfills `.env` after success.
+For the default pure bootstrap flow, users only need an EOA signer, deployment-fee funding, and any optional amount caps. PredictClaw handles the product-configured factory, previews before broadcast, requires explicit confirmation, and returns a manual env block after success.
 
 Pure `mandated-vault` does **not** provide predict.fun trading parity. `wallet approve`, `wallet withdraw`, `buy`, `positions`, `position`, `hedge scan`, and `hedge analyze` fail closed with `unsupported-in-mandated-vault-v1`.
 

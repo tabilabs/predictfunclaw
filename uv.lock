@@ -963,7 +963,7 @@ wheels = [
 
 [[package]]
 name = "predictclaw"
-version = "0.1.30"
+version = "0.1.31"
 source = { editable = "." }
 dependencies = [
     { name = "eth-account" },

@@ -363,9 +363,9 @@ PredictClaw 支持四种显式 wallet mode：
 
 `mandated-vault` 是一个高级显式 opt-in 模式，应把它视为独立的 control-plane 路径，而不是 Predict Account 交易的平级答案。
 
-内置 factory 默认值和成功后的 `.env` 回填，只是在 pure bootstrap 场景里提供便利，并不能替代部署时 signer 输入，也不能替代 `predict-account` overlay 所需的专用 env。
+内置 factory 默认值和成功后返回的手动 env block，只是在 pure bootstrap 场景里提供便利，并不能替代部署时 signer 输入，也不能替代 `predict-account` overlay 所需的专用 env。
 
-对于默认 pure bootstrap 流程，用户只需要提供 EOA signer、部署手续费资金，以及可选的额度控制。PredictClaw 会处理固定 factory、预览、确认和 `.env` 回填。
+对于默认 pure bootstrap 流程，用户只需要提供 EOA signer、部署手续费资金，以及可选的额度控制。PredictClaw 会处理固定 factory、预览、确认，并在成功后返回手动 env block。
 
 pure `mandated-vault` 不提供 predict.fun trading parity。`wallet approve`、`wallet withdraw`、`buy`、`positions`、`position`、`hedge scan`、`hedge analyze` 都会 fail closed，并返回 `unsupported-in-mandated-vault-v1`。
 
@@ -427,7 +427,7 @@ uv run python scripts/predictclaw.py hedge analyze 101 202 --json
 - `wallet status` 会报告 signer mode、funding guidance、余额和 approval readiness。
 - `wallet deposit` 是一个资金引导命令：它会分开展示手动 top-up 地址、Predict Account 收款/交易身份，以及 orchestration vault 元数据，并给出可接受资产（`BNB`、`USDT`）。
 - `wallet bootstrap-vault` 是 pure mandated-vault 的预览 / 确认入口。
-- 默认 bootstrap 流程会使用固定 factory `0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6`，并在确认成功后回填 `.env`。
+- 默认 bootstrap 流程会使用固定 factory `0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6`，并在确认成功后返回可手动复制的 env block。
 - `wallet redeem-vault --preview --json` 会预检 vault share 赎回，并返回 `redeemableNow`、`blockingReason` 以及像 `ERC4626ExceededMaxRedeem` 这样的合约错误。
 - `wallet withdraw` 在尝试执行转账逻辑前会先验证目标地址 checksum、金额为正、余额充足以及 BNB gas 余量。
 - 在 fixture 模式下，withdraw 会返回确定性的占位 tx hash，而不会触链。

@@ -79,7 +79,7 @@ def print_help() -> None:
     print("  markets search <query>      Search predict.fun markets")
     print("  market <id>                 Show a single market detail view")
     print(
-        "  setup mandated-mcp          Detect or install the mandated-vault MCP runtime"
+        "  setup mandated-mcp          Detect the external mandated-vault MCP runtime"
     )
     print("  wallet status               Show wallet mode, balances, and readiness")
     print("  wallet approve              Set predict.fun approvals")

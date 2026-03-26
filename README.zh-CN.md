@@ -199,9 +199,9 @@ ERC_MANDATED_MCP_COMMAND=erc-mandated-mcp
 ERC_MANDATED_CHAIN_ID=56
 ```
 
-这就是现在的默认 pure `mandated-vault` onboarding。PredictClaw 会使用固定产品 factory `0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6`，从 `PREDICT_EOA_PRIVATE_KEY` 推导 signer 地址，先给出预览，再要求显式确认，最后在成功后把 deployed vault 地址和解析后的值回填到 `.env`。
+这就是现在的默认 pure `mandated-vault` onboarding。PredictClaw 会使用固定产品 factory `0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6`，从 `PREDICT_EOA_PRIVATE_KEY` 推导 signer 地址，先给出预览，再要求显式确认，最后返回一段可手动复制到 `.env` 的 env block。
 
-执行 `--confirm` 时，PredictClaw 会自动为该 MCP 子进程打开 broadcast 开关，并桥接 bootstrap signer key。标准流程下，你不需要再手动设置 `ERC_MANDATED_ENABLE_BROADCAST=1` 或 `ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY`。
+执行 `--confirm` 时，PredictClaw 会自动为该 MCP 子进程打开 broadcast 开关，并桥接 bootstrap signer key。标准流程下，你不需要再手动设置 `ERC_MANDATED_ENABLE_BROADCAST=1` 或 `ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY`，但它也不会再自动修改 `.env`。
 
 先做预览：
 
@@ -351,13 +351,13 @@ pure `mandated-vault` 不提供 predict.fun trading parity。`wallet approve`、
 
 如果你的环境通过类似 `@erc-mandated/mcp` 的包来提供这套 runtime，那么你真正需要给 PredictClaw 配置的是该 runtime 对应的启动命令，也就是 `ERC_MANDATED_MCP_COMMAND`。PredictClaw 对外公开的契约是“命令入口”，而不是某个固定的包管理器依赖。
 
-如果你想走一键路径，可以运行：
+默认安全路径可以运行：
 
 ```bash
-uv run python scripts/predictclaw.py setup mandated-mcp --install --write-env
+uv run python scripts/predictclaw.py setup mandated-mcp
 ```
 
-这个 helper 会先探测已有 launcher；如果没有，再尝试执行 `npm install -g @erc-mandated/mcp`，成功后自动回填 `ERC_MANDATED_MCP_COMMAND` 到本地 `.env`。它不会自动安装前置（例如 Node 或 npm）；如果前置缺失，PredictClaw 会直接给出明确提示。
+PredictClaw 在默认路径里只会检测 `erc-mandated-mcp` launcher 是否可用。它不会全局安装包，也不会自动修改 `.env`。请先自行安装外部 `erc-mandated-mcp` runtime，然后再手动设置 `ERC_MANDATED_MCP_COMMAND`。
 
 MCP orchestrates transport and preparation; the vault contract policy authorizes what the vault can actually execute.
 

@@ -16,8 +16,7 @@ if str(SKILL_DIR) not in sys.path:
 import lib  # pyright: ignore[reportMissingImports]
 
 from lib.config import ConfigError, PredictConfig  # pyright: ignore[reportMissingImports]
-from lib.env_backfill import backfill_env_file  # pyright: ignore[reportMissingImports]
-from lib.local_env import load_local_env, resolve_local_env_path  # pyright: ignore[reportMissingImports]
+from lib.local_env import load_local_env  # pyright: ignore[reportMissingImports]
 from lib.mandated_mcp_bridge import MandatedVaultMcpError  # pyright: ignore[reportMissingImports]
 from lib.wallet_manager import WalletManager  # pyright: ignore[reportMissingImports]
 
@@ -94,14 +93,13 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "Preview the pure mandated-vault bootstrap using the product-configured factory 0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6. "
             "Without --confirm this command only shows the predicted vault, chain, signer, and "
-            "transaction summary. Explicit confirmation is required before broadcast. With --confirm it executes MCP vault_bootstrap, auto-bridges the execute-only broadcast gate and bootstrap signer env for that subprocess, then backfills "
-            "the local .env with the deployed vault address and resolved values."
+            "transaction summary. Explicit confirmation is required before broadcast. With --confirm it executes MCP vault_bootstrap, auto-bridges the execute-only broadcast gate and bootstrap signer env for that subprocess, and returns a manual env block you can copy into .env yourself."
         ),
     )
     bootstrap.add_argument(
         "--confirm",
         action="store_true",
-        help="Broadcast the vault deployment and backfill the local .env.",
+        help="Broadcast the vault deployment and return a manual env block.",
     )
     bootstrap.add_argument("--json", action="store_true")
     bootstrap.set_defaults(handler=_handle_bootstrap_vault)
@@ -524,11 +522,6 @@ def _handle_bootstrap_vault(args: argparse.Namespace) -> int:
         return _emit_error(args, error)
 
     payload = snapshot.to_dict()
-    if args.confirm:
-        env_path = resolve_local_env_path(SKILL_DIR)
-        backfill_env_file(env_path, snapshot.backfill_env or {})
-        payload["envPath"] = str(env_path)
-        payload["envUpdated"] = True
 
     if args.json:
         print(json.dumps(payload, indent=2))
@@ -550,10 +543,13 @@ def _handle_bootstrap_vault(args: argparse.Namespace) -> int:
         print(f"Tx Gas: {tx_summary.get('gas')}")
     if args.confirm:
         print(f"Deployed Vault: {payload['deployedVault']}")
-        print(f"Updated Env: {payload['envPath']}")
+        env_block = payload.get("envBlock")
+        if env_block:
+            print("Manual Env Block:")
+            print(env_block)
     else:
         print(
-            "Run `predictclaw wallet bootstrap-vault --confirm --json` to broadcast and backfill .env."
+            "Run `predictclaw wallet bootstrap-vault --confirm --json` to broadcast. Copy the returned env block manually if you want to update .env."
         )
     return 0
 

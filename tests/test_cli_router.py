@@ -173,17 +173,18 @@ def test_top_level_help_exposes_planned_command_surface() -> None:
     assert "unsupported-in-mandated-vault-v1" in combined
     assert "vault-to-predict-account" in combined
     assert "funding-required" in combined
+    assert "Detect the external mandated-vault MCP runtime" in combined
 
 
-def test_setup_help_exposes_mandated_mcp_installer() -> None:
+def test_setup_help_exposes_safe_manual_mandated_mcp_guidance() -> None:
     result = run_predictclaw("setup", "--help")
 
     assert result.returncode == 0
     combined = result.stdout + result.stderr
     assert "mandated-mcp" in combined
-    assert "--install" in combined
-    assert "--write-env" in combined
     assert "erc-mandated-mcp" in combined
+    assert "--install" not in combined
+    assert "--write-env" not in combined
 
 
 def test_unknown_command_fails_cleanly() -> None:
@@ -225,6 +226,7 @@ def test_wallet_bootstrap_help_documents_preview_and_confirmation_flags() -> Non
     assert "preview" in combined.lower()
     assert "confirmation" in combined.lower()
     assert "0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6" in combined
+    assert "manual" in combined.lower()
 
 
 def test_wallet_redeem_vault_help_documents_preview_only_flow() -> None:

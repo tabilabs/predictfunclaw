@@ -8,8 +8,6 @@ from dataclasses import asdict
 from pathlib import Path
 
 from lib.mandated_mcp_setup import (
-    MandatedMcpInstallPrerequisiteError,
-    MandatedMcpInstallRuntimeError,
     configure_mandated_mcp,
 )
 
@@ -19,13 +17,13 @@ SKILL_DIR = SCRIPT_DIR.parent
 HELP_TEXT = """PredictClaw setup helpers.
 
 Usage:
-    predictclaw setup mandated-mcp [--install] [--write-env] [--json]
+    predictclaw setup mandated-mcp [--json]
 
 Notes:
     - mandated-mcp uses the external erc-mandated-mcp runtime.
-    - --install only installs the MCP package itself via npm.
-    - missing prerequisites such as npm are reported explicitly and are not auto-installed.
-    - --write-env backfills ERC_MANDATED_MCP_COMMAND into the local .env file.
+    - PredictClaw does not globally install packages in the default path.
+    - PredictClaw does not auto-edit `.env` in the default path.
+    - Install the external runtime yourself, then set ERC_MANDATED_MCP_COMMAND manually.
 """
 
 
@@ -50,15 +48,9 @@ def main(argv: list[str] | None = None) -> int:
         print_help()
         return 1
 
-    install = False
-    write_env = False
     as_json = False
     for arg in args:
-        if arg == "--install":
-            install = True
-        elif arg == "--write-env":
-            write_env = True
-        elif arg == "--json":
+        if arg == "--json":
             as_json = True
         elif arg in {"--help", "-h", "help"}:
             print_help()
@@ -71,13 +63,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         result = configure_mandated_mcp(
             skill_dir=SKILL_DIR,
-            install=install,
-            write_env=write_env,
         )
-    except (
-        MandatedMcpInstallPrerequisiteError,
-        MandatedMcpInstallRuntimeError,
-    ) as error:
+    except RuntimeError as error:
         payload = {"error": type(error).__name__, "message": str(error)}
         if as_json:
             return _emit_json(False, payload)
@@ -91,7 +78,7 @@ def main(argv: list[str] | None = None) -> int:
     print(result.message)
     if result.status != "ready":
         print(
-            "Run `predictclaw setup mandated-mcp --install --write-env` to install the MCP runtime and backfill ERC_MANDATED_MCP_COMMAND."
+            "Install the external erc-mandated-mcp runtime yourself, then set ERC_MANDATED_MCP_COMMAND in your local .env manually."
         )
     return 0 if result.status == "ready" else 1
 

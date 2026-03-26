@@ -141,9 +141,9 @@ ERC_MANDATED_MCP_COMMAND=erc-mandated-mcp
 ERC_MANDATED_CHAIN_ID=56
 ```
 
-This is now the normal pure `mandated-vault` onboarding path. PredictClaw uses the fixed product factory `0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6`, derives the signer address from `PREDICT_EOA_PRIVATE_KEY`, previews first, requires explicit confirmation, and backfills `.env` with the deployed vault address and resolved values.
+This is now the normal pure `mandated-vault` onboarding path. PredictClaw uses the fixed product factory `0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6`, derives the signer address from `PREDICT_EOA_PRIVATE_KEY`, previews first, requires explicit confirmation, and returns a manual env block instead of auto-editing `.env`.
 
-On `--confirm`, PredictClaw automatically enables the MCP broadcast gate for that subprocess and bridges the bootstrap signer key. The standard flow does not require manually setting `ERC_MANDATED_ENABLE_BROADCAST=1` or `ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY`.
+On `--confirm`, PredictClaw automatically enables the MCP broadcast gate for that subprocess and bridges the bootstrap signer key. The standard flow does not require manually setting `ERC_MANDATED_ENABLE_BROADCAST=1` or `ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY`, but it no longer auto-edits `.env`.
 
 Preview first:
 
@@ -249,9 +249,9 @@ The optional `ERC_MANDATED_FUNDING_*` envs cap Vault→Predict transfers by per-
 - Vault-related JSON also exposes `vaultAuthority`, `vaultExecutor`, `bootstrapSigner`, `allowedTokenAddresses`, and `allowedRecipients` so OpenClaw can reason about configured permissions.
 - Overlay `buy` can proceed when the Predict Account balance is sufficient; otherwise it returns deterministic `funding-required` guidance that points to `wallet deposit --json`.
 - Pure `mandated-vault` needs a working `ERC_MANDATED_MCP_COMMAND`; overlay mode also needs `ERC_MANDATED_VAULT_ASSET_ADDRESS` and `ERC_MANDATED_VAULT_AUTHORITY` for funding orchestration.
-- To detect or install the runtime and auto-fill the command entry, run `cd {baseDir} && uv run python scripts/predictclaw.py setup mandated-mcp --install --write-env`.
-- That helper installs only `@erc-mandated/mcp`; it does not auto-install prerequisites such as Node or npm.
-- In short: do not auto-install prerequisites; fail closed with explicit guidance when they are missing.
+- To detect whether the runtime is already available, run `cd {baseDir} && uv run python scripts/predictclaw.py setup mandated-mcp`.
+- The default path does not globally install packages and does not auto-edit `.env`.
+- Install the external `erc-mandated-mcp` runtime yourself, then set `ERC_MANDATED_MCP_COMMAND` manually.
 - Hedge analysis uses OpenRouter; `OPENROUTER_API_KEY` is only required for non-fixture hedge analysis, and fixture mode stays secret-free.
 
 ```bash

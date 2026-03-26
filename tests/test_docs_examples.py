@@ -202,23 +202,22 @@ def test_docs_explain_predictclaw_version_source_of_truth() -> None:
     assert "仓库根目录" in readme_zh
 
 
-def test_docs_explain_mandated_mcp_one_click_install_boundary() -> None:
+def test_docs_explain_mandated_mcp_safe_manual_setup_boundary() -> None:
     predict_root = get_predict_root()
     readme = (predict_root / "README.md").read_text()
     skill = (predict_root / "SKILL.md").read_text()
     readme_zh = (predict_root / "README.zh-CN.md").read_text()
 
     for text in [readme, skill]:
-        assert "setup mandated-mcp --install --write-env" in text
-        assert "auto-fill" in text or "auto-fill the command" in text
-        assert (
-            "do not auto-install prerequisites" in text
-            or "do not auto-install Node" in text
-        )
+        assert "Install the external `erc-mandated-mcp` runtime yourself" in text
+        assert "does not globally install packages" in text
+        assert "does not auto-edit `.env`" in text
+        assert "setup mandated-mcp --install --write-env" not in text
 
-    assert "setup mandated-mcp --install --write-env" in readme_zh
-    assert "自动回填" in readme_zh
-    assert "不会自动安装前置" in readme_zh
+    assert "自行安装外部 `erc-mandated-mcp` runtime" in readme_zh
+    assert "不会全局安装包" in readme_zh
+    assert "不会自动修改 `.env`" in readme_zh
+    assert "setup mandated-mcp --install --write-env" not in readme_zh
 
 
 def test_docs_shift_mandated_vault_default_to_preview_confirm_bootstrap_flow() -> None:
@@ -236,9 +235,10 @@ def test_docs_shift_mandated_vault_default_to_preview_confirm_bootstrap_flow() -
         assert "preview" in text.lower()
         assert "confirm" in text.lower()
         assert ".env" in text
-        assert "backfill" in text.lower()
+        assert "manual" in text.lower()
 
     assert "0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6" in readme_zh
     assert "预览" in readme_zh
     assert "确认" in readme_zh
     assert ".env" in readme_zh
+    assert "手动" in readme_zh

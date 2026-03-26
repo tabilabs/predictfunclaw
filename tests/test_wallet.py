@@ -676,7 +676,7 @@ def test_wallet_status_mandated_vault_predicts_address_when_not_explicit() -> No
     assert bridge.health_check_calls == 0
 
 
-def test_wallet_bootstrap_executes_and_returns_backfill_ready_payload() -> None:
+def test_wallet_bootstrap_executes_and_returns_manual_env_payload() -> None:
     config = PredictConfig.from_env(
         {
             "PREDICT_ENV": "testnet",
@@ -690,6 +690,7 @@ def test_wallet_bootstrap_executes_and_returns_backfill_ready_payload() -> None:
 
     payload = getattr(manager, "bootstrap_vault")(confirm=True).to_dict()
     backfill_env = cast(dict[str, str], payload["backfillEnv"])
+    env_block = cast(str, payload["envBlock"])
 
     assert payload["mode"] == "execute"
     assert payload["deployedVault"] == "0x1234567890123456789012345678901234567890"
@@ -701,6 +702,7 @@ def test_wallet_bootstrap_executes_and_returns_backfill_ready_payload() -> None:
     )
     assert backfill_env["ERC_MANDATED_CHAIN_ID"] == "97"
     assert backfill_env["ERC_MANDATED_MCP_COMMAND"] == "erc-mandated-mcp"
+    assert "ERC_MANDATED_VAULT_ADDRESS=" in env_block
     assert bridge.bootstrap_modes == ["execute"]
 
 

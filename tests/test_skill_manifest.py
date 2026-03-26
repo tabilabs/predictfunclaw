@@ -14,12 +14,36 @@ def test_skill_manifest_openclaw_contract() -> None:
     assert openclaw["emoji"]
     assert openclaw["homepage"] == "https://predict.fun"
     assert "uv" in openclaw["requires"]["bins"]
-    assert openclaw["requires"]["env"] == [
+    assert "erc-mandated-mcp" in openclaw["requires"]["bins"]
+    for env_name in [
         "PREDICT_ENV",
         "PREDICT_WALLET_MODE",
-    ]
+        "PREDICT_API_KEY",
+        "PREDICT_EOA_PRIVATE_KEY",
+        "PREDICT_ACCOUNT_ADDRESS",
+        "PREDICT_PRIVY_PRIVATE_KEY",
+        "ERC_MANDATED_MCP_COMMAND",
+        "ERC_MANDATED_VAULT_ADDRESS",
+        "ERC_MANDATED_FACTORY_ADDRESS",
+        "ERC_MANDATED_VAULT_ASSET_ADDRESS",
+        "ERC_MANDATED_VAULT_AUTHORITY",
+        "ERC_MANDATED_AUTHORITY_PRIVATE_KEY",
+        "ERC_MANDATED_EXECUTOR_PRIVATE_KEY",
+        "ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY",
+        "OPENROUTER_API_KEY",
+    ]:
+        assert env_name in openclaw["requires"]["env"]
     assert "primaryEnv" not in openclaw
     assert "install" in openclaw
+    install_entries = openclaw["install"]
+    assert any(
+        entry["kind"] == "brew" and entry["formula"] == "uv"
+        for entry in install_entries
+    )
+    assert any(
+        entry["kind"] == "node" and entry["package"] == "@erc-mandated/mcp"
+        for entry in install_entries
+    )
 
     assert "{baseDir}" in body
     assert "~/.openclaw/skills/predictclaw/" in body

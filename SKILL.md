@@ -1,7 +1,7 @@
 ---
 name: predictclaw
 description: Predict.fun skill with a PolyClaw-style CLI for markets, wallet funding, trading, positions, and hedging.
-metadata: {"openclaw":{"emoji":"🔮","homepage":"https://predict.fun","requires":{"bins":["uv"],"env":["PREDICT_ENV","PREDICT_WALLET_MODE"]},"install":[{"id":"uv-brew","kind":"brew","formula":"uv","bins":["uv"],"label":"Install uv (brew)"}]}}
+metadata: {"openclaw":{"emoji":"🔮","homepage":"https://predict.fun","requires":{"bins":["uv","erc-mandated-mcp"],"env":["PREDICT_ENV","PREDICT_WALLET_MODE","PREDICT_API_KEY","PREDICT_EOA_PRIVATE_KEY","PREDICT_ACCOUNT_ADDRESS","PREDICT_PRIVY_PRIVATE_KEY","ERC_MANDATED_MCP_COMMAND","ERC_MANDATED_VAULT_ADDRESS","ERC_MANDATED_FACTORY_ADDRESS","ERC_MANDATED_VAULT_ASSET_ADDRESS","ERC_MANDATED_VAULT_AUTHORITY","ERC_MANDATED_AUTHORITY_PRIVATE_KEY","ERC_MANDATED_EXECUTOR_PRIVATE_KEY","ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY","OPENROUTER_API_KEY"]},"install":[{"id":"uv-brew","kind":"brew","formula":"uv","bins":["uv"],"label":"Install uv (brew)"},{"id":"erc-mandated-mcp-node","kind":"node","package":"@erc-mandated/mcp","bins":["erc-mandated-mcp"],"label":"Install erc-mandated-mcp (manual prerequisite for vault flows)"}]}}
 ---
 
 # PredictClaw

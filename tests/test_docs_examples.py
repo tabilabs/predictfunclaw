@@ -93,10 +93,15 @@ def test_docs_cover_wallet_modes_and_mandated_vault_boundaries() -> None:
     for text in [readme, skill, readme_zh]:
         assert "mandated-vault" in text
         assert "vault-to-predict-account" in text
+        assert (
+            "predict-account + vault" in text
+            or "predict-account + vault" in text.lower()
+        )
 
     for text in [readme, skill]:
-        for mode in ["read-only", "eoa", "predict-account", "mandated-vault"]:
+        for mode in ["read-only", "eoa", "predict-account", "predict-account + vault"]:
             assert mode in text
+        assert "standalone mandated-vault mode" not in text.lower()
         assert "PREDICT_WALLET_MODE" in text
         assert "ERC_MANDATED_VAULT_ADDRESS" in text
         assert "ERC_MANDATED_FACTORY_ADDRESS" in text
@@ -167,6 +172,7 @@ def test_docs_explain_first_install_bootstrap_layers() -> None:
         assert "template.readonly.env" in text
         assert "template.eoa.env" in text
         assert "template.predict-account.env" in text
+        assert "template.predict-account-vault.env" in text
         assert "template.mandated-vault.env" in text
         assert "api.predict.fun" in text
         assert "api-testnet.predict.fun" not in text
@@ -179,6 +185,7 @@ def test_docs_explain_first_install_bootstrap_layers() -> None:
     assert "template.readonly.env" in readme_zh
     assert "template.eoa.env" in readme_zh
     assert "template.predict-account.env" in readme_zh
+    assert "template.predict-account-vault.env" in readme_zh
     assert "template.mandated-vault.env" in readme_zh
     assert "api.predict.fun" in readme_zh
     assert "api-testnet.predict.fun" not in readme_zh
@@ -290,10 +297,38 @@ def test_docs_shift_mandated_vault_default_to_preview_confirm_bootstrap_flow() -
         assert "preview" in text.lower()
         assert "confirm" in text.lower()
         assert ".env" in text
-        assert "manual" in text.lower()
+        assert "backfill" in text.lower()
+        assert (
+            "internal bootstrap subflow" in text.lower()
+            or "internal/compatibility bootstrap template" in text.lower()
+        )
 
     assert "0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6" in readme_zh
     assert "预览" in readme_zh
     assert "确认" in readme_zh
     assert ".env" in readme_zh
-    assert "手动" in readme_zh
+
+
+def test_docs_explain_only_four_user_facing_modes() -> None:
+    predict_root = get_predict_root()
+    readme = (predict_root / "README.md").read_text()
+    skill = (predict_root / "SKILL.md").read_text()
+    readme_zh = (predict_root / "README.zh-CN.md").read_text()
+
+    for text in [readme, skill]:
+        assert (
+            "supports four explicit wallet modes" in text.lower()
+            or "four user-facing modes" in text.lower()
+        )
+        assert "read-only" in text
+        assert "eoa" in text
+        assert "predict-account" in text
+        assert "predict-account + vault" in text
+        assert (
+            "mandated-vault is not a standalone" in text.lower()
+            or "not a standalone user mode" in text.lower()
+        )
+
+    assert "四种" in readme_zh
+    assert "predict-account + vault" in readme_zh
+    assert "不是独立模式" in readme_zh

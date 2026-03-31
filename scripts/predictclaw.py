@@ -101,7 +101,7 @@ def print_help() -> None:
     print("Environment:")
     print("  PREDICT_ENV                 testnet, mainnet, or fixture-safe local mode")
     print(
-        "  PREDICT_WALLET_MODE         explicit mode override: read-only, eoa, predict-account, or mandated-vault"
+        "  PREDICT_WALLET_MODE         user-facing runtime modes: read-only, eoa, or predict-account (predict-account + vault binds vault envs onto predict-account)"
     )
     print("  PREDICT_EOA_PRIVATE_KEY     EOA trading credential")
     print("  PREDICT_ACCOUNT_ADDRESS     Predict Account smart-wallet address")
@@ -160,10 +160,10 @@ def print_help() -> None:
         "  - wallet status requires signer configuration; start read-only verification with markets trending instead."
     )
     print(
-        "  - Pure mandated-vault remains advanced explicit opt-in, but `predict-account + ERC_MANDATED_*` is the preferred advanced funding route."
+        "  - User-facing modes are read-only, eoa, predict-account, and predict-account + vault."
     )
     print(
-        "  - Pure mandated-vault bootstrap now defaults to preview-first onboarding; `wallet bootstrap-vault --confirm` is the only broadcast step."
+        "  - `mandated-vault` remains an internal bootstrap subflow used to create/prepare a vault for predict-account + vault onboarding."
     )
     print(
         "  - `wallet bootstrap-vault --confirm` auto-bridges the execute-only MCP broadcast gate and bootstrap signer env for that subprocess."

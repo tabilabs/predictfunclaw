@@ -97,8 +97,9 @@ Do not treat the full derivation tuple as the primary first-step answer for over
     - `template.env` -> secret-free local fixture bootstrap
     - `template.readonly.env` -> live read-only market reads
     - `template.eoa.env` -> direct private-key trading
-    - `template.predict-account.env` -> recommended funded-trading path (Predict Account trades, Vault can fund it)
-    - `template.mandated-vault.env` -> recommended governance/control-plane path for advanced vault-only workflows
+    - `template.predict-account.env` -> Predict Account trading
+    - `template.predict-account-vault.env` -> Predict Account + vault
+    - `template.mandated-vault.env` -> internal/compatibility bootstrap template
 3. Copy the chosen template to `.env` inside `~/.openclaw/skills/predictclaw/`.
 4. Fill only the variables required for that mode.
 5. Verify the install with `uv run python scripts/predictclaw.py --help`.
@@ -106,7 +107,7 @@ Do not treat the full derivation tuple as the primary first-step answer for over
    - fixture bootstrap -> `uv run python scripts/predictclaw.py markets trending`
    - live read-only -> `uv run python scripts/predictclaw.py markets trending`
    - `eoa` / `predict-account` -> `uv run python scripts/predictclaw.py wallet status --json`
-   - `mandated-vault` -> `uv run python scripts/predictclaw.py wallet bootstrap-vault --json`
+   - `predict-account + vault` -> `uv run python scripts/predictclaw.py wallet status --json`
 
 ### Choose your route first
 
@@ -128,15 +129,15 @@ Do not treat the full derivation tuple as the primary first-step answer for over
 - `template.env` -> safest first install; uses `test-fixture` + `read-only` so the CLI can start without secrets or network access
 - `template.readonly.env` -> live market reads; mainnet market reads require PREDICT_API_KEY
 - `template.eoa.env` -> EOA signer flow, pinned to mainnet with `https://api.predict.fun`
-- `template.predict-account.env` -> recommended funded-trading template; use this when Predict Account remains the trading identity and Vault may fund it. If you already have a vault, start from its address. If you do not, bootstrap one first.
-- `template.mandated-vault.env` -> recommended governance/control-plane template for advanced pure vault workflows
+- `template.predict-account.env` -> Predict Account signer flow, pinned to mainnet with `https://api.predict.fun`
+- `template.predict-account-vault.env` -> canonical user-facing template for Predict Account + vault
+- `template.mandated-vault.env` -> internal/compatibility bootstrap template used during vault creation or recovery
 
 ### Recommended operating model
 
-- For user-facing funded trading, recommend `predict-account + ERC_MANDATED_*`.
+- For user-facing funded trading, recommend `predict-account + vault`.
 - In that model, Predict Account remains the trading identity and deposit address, while Vault acts as the funding/control plane.
-- For governance-first or bootstrap-only workflows, recommend pure `mandated-vault` instead.
-- Do not present pure `mandated-vault` as a co-equal default for trading because it still fails closed on buy / positions / hedge flows.
+- `mandated-vault` is not a standalone user mode; it remains the internal/bootstrap path used when a vault still needs to be created or prepared.
 
 ## Real first-install paths
 
@@ -190,7 +191,7 @@ PREDICT_ENV=test-fixture
 PREDICT_WALLET_MODE=read-only
 ```
 
-Use this for secret-free CLI verification and local market browsing only. It does not hit the live API. Switch to `eoa`, `predict-account`, or `mandated-vault` before using wallet or trade subcommands.
+Use this for secret-free CLI verification and local market browsing only. It does not hit the live API. Switch to `eoa`, `predict-account`, or `predict-account + vault` before using wallet or trade subcommands.
 
 ### live read-only mode
 
@@ -223,11 +224,35 @@ PREDICT_ACCOUNT_ADDRESS=0xYOUR_PREDICT_ACCOUNT
 PREDICT_PRIVY_PRIVATE_KEY=0xYOUR_PRIVY_EXPORTED_KEY
 ```
 
-Use `https://predict.fun/account/deposit` for `PREDICT_ACCOUNT_ADDRESS`. That page shows the Predict Account smart-wallet address used as the overlay manual top-up address, funding recipient, and trading identity.
+### predict-account + vault onboarding
 
-Do not copy the address shown at `https://predict.fun/account/settings` into `PREDICT_ACCOUNT_ADDRESS` when it differs. In practice, the settings page can show the signer/owner address, while PredictClaw expects the Predict Account smart-wallet address that matches the deposit page.
+The user-facing advanced mode is `predict-account + vault`, not a standalone `mandated-vault` mode.
 
-### mandated-vault mode (default bootstrap flow)
+Start from the canonical template:
+
+```dotenv
+PREDICT_ENV=mainnet
+PREDICT_API_BASE_URL=https://api.predict.fun
+PREDICT_API_KEY=YOUR_PREDICT_API_KEY
+PREDICT_WALLET_MODE=predict-account
+PREDICT_ACCOUNT_ADDRESS=0xYOUR_PREDICT_ACCOUNT
+PREDICT_PRIVY_PRIVATE_KEY=0xYOUR_PRIVY_EXPORTED_KEY
+ERC_MANDATED_VAULT_ADDRESS=0xYOUR_DEPLOYED_VAULT
+ERC_MANDATED_VAULT_ASSET_ADDRESS=0xYOUR_ASSET
+ERC_MANDATED_VAULT_AUTHORITY=0xYOUR_AUTHORITY
+ERC_MANDATED_AUTHORITY_PRIVATE_KEY=0xYOUR_VAULT_AUTHORITY_KEY
+ERC_MANDATED_MCP_COMMAND=erc-mandated-mcp
+ERC_MANDATED_CONTRACT_VERSION=v0.3.0-agent-contract
+ERC_MANDATED_CHAIN_ID=56
+```
+
+If you already have a vault, bind it through `ERC_MANDATED_VAULT_ADDRESS` and the related authority/asset values.
+
+If you do not yet have a vault, use the bootstrap helper first.
+
+### Internal bootstrap subflow (`mandated-vault`)
+
+The older `mandated-vault` path still exists internally as the bootstrap/compatibility subflow that creates or prepares a vault before you return to the user-facing `predict-account + vault` route.
 
 ```dotenv
 PREDICT_ENV=mainnet
@@ -239,7 +264,7 @@ ERC_MANDATED_MCP_COMMAND=erc-mandated-mcp
 ERC_MANDATED_CHAIN_ID=56
 ```
 
-This is now the normal pure `mandated-vault` onboarding path. PredictClaw uses the fixed product factory `0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6`, derives the signer address from `PREDICT_EOA_PRIVATE_KEY`, previews the deployment first, requires explicit confirmation before broadcast, and then returns a manual env block you can copy into `.env` yourself.
+PredictClaw uses the fixed product factory `0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6`, derives the signer address from `PREDICT_PRIVATE_KEY`, previews the deployment first, requires explicit confirmation before broadcast, then backfills `.env` with the deployed vault address and resolved values.
 
 On `--confirm`, PredictClaw automatically enables the MCP broadcast gate for that subprocess and bridges the bootstrap signer key. The standard flow does not require manually setting `ERC_MANDATED_ENABLE_BROADCAST=1` or `ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY`, but it no longer auto-edits `.env` for you.
 
@@ -263,7 +288,11 @@ ERC_MANDATED_FUNDING_MAX_AMOUNT_PER_WINDOW=10000000000000000000
 ERC_MANDATED_FUNDING_WINDOW_SECONDS=3600
 ```
 
-### mandated-vault manual path (explicit deployed vault)
+### Internal bootstrap compatibility paths
+
+If you intentionally need the internal bootstrap path directly, these legacy/compatibility variants still exist:
+
+#### Explicit deployed vault
 
 ```dotenv
 PREDICT_ENV=mainnet
@@ -275,9 +304,9 @@ ERC_MANDATED_MCP_COMMAND=erc-mandated-mcp
 ERC_MANDATED_CHAIN_ID=56
 ```
 
-Use this advanced/manual path when the vault is already deployed and you want PredictClaw to target it directly.
+Use this only when you intentionally need the internal bootstrap path to target an already deployed vault.
 
-### mandated-vault manual path (full derivation tuple)
+#### Full derivation tuple
 
 ```dotenv
 PREDICT_ENV=mainnet
@@ -334,12 +363,12 @@ This is the correct route when Predict Account remains the deposit/trading ident
 
 ## Wallet Modes
 
-PredictClaw supports four explicit wallet modes:
+PredictClaw supports four user-facing modes:
 
 - `read-only` — browse market data only; no signer-backed wallet actions.
 - `eoa` — direct signer path for wallet, trade, and funding flows.
 - `predict-account` — smart-wallet funding/trading path using `PREDICT_ACCOUNT_ADDRESS` plus `PREDICT_PRIVY_PRIVATE_KEY`.
-- `mandated-vault` — advanced explicit opt-in control-plane path for protected vault-only status/deposit flows.
+- `predict-account + vault` — Predict Account remains the trading identity while Vault acts as the advanced funding source.
 
 ### Recommended route
 
@@ -357,8 +386,9 @@ This is the default route for the Predict Account trading-identity workflow. It 
 - If the active mode is pure `mandated-vault`, the route is vault control-plane first. In that mode, the advanced automation/governance answer is: fund the vault first, then use Vault->Predict funding to top up the Predict Account.
 - When a user asks for the funding address, always answer in terms of the current mode instead of giving one global address rule.
 
-### Pure mandated-vault boundaries
+### Internal bootstrap note
 
+<<<<<<< HEAD
 `mandated-vault` is an advanced explicit opt-in mode. Treat it as a separate control-plane path, not a co-equal answer for Predict Account trading.
 
 Bundled factory defaults and the returned manual env block make pure bootstrap more convenient, but they do not replace deployment-time signer inputs or the overlay-specific env required by the `predict-account` funding route.
@@ -366,6 +396,9 @@ Bundled factory defaults and the returned manual env block make pure bootstrap m
 For the default pure bootstrap flow, users only need an EOA signer, deployment-fee funding, and any optional amount caps. PredictClaw handles the product-configured factory, previews before broadcast, requires explicit confirmation, and returns a manual env block after success.
 
 Pure `mandated-vault` does **not** provide predict.fun trading parity. `wallet approve`, `wallet withdraw`, `buy`, `positions`, `position`, `hedge scan`, and `hedge analyze` fail closed with `unsupported-in-mandated-vault-v1`.
+=======
+`mandated-vault` still exists in the runtime as an internal/bootstrap compatibility subflow, but it is **not a standalone user mode**. It is used when PredictClaw needs to create or prepare a vault before returning to `predict-account + vault`.
+>>>>>>> 7e22c30 (docs: reframe vault onboarding as predict-account plus vault)
 
 ### Common configuration mistakes
 

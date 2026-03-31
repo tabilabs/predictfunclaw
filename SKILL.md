@@ -104,8 +104,15 @@ For signer-backed modes, the next verification step is:
 
 ```bash
 cd {baseDir} && uv run python scripts/predictclaw.py wallet status --json
-cd {baseDir} && uv run python scripts/predictclaw.py wallet bootstrap-vault --json
+cd {baseDir} && uv run python scripts/predictclaw.py wallet status --json
 ```
+
+Canonical user-facing templates now include:
+
+- `template.predict-account.env`
+- `template.predict-account-vault.env`
+
+`template.mandated-vault.env` remains only as the internal/bootstrap compatibility template.
 
 ## Configuration examples
 
@@ -157,11 +164,33 @@ PREDICT_ACCOUNT_ADDRESS=0xYOUR_PREDICT_ACCOUNT
 PREDICT_PRIVY_PRIVATE_KEY=0xYOUR_PRIVY_EXPORTED_KEY
 ```
 
-Use `https://predict.fun/account/deposit` for `PREDICT_ACCOUNT_ADDRESS`. That page shows the Predict Account smart-wallet address used as the manual top-up address, funding recipient, and trading identity in overlay mode.
+### predict-account + vault route
 
-Do not use the address from `https://predict.fun/account/settings` when it differs. In practice, the settings page can expose the signer / owner address, while PredictClaw expects the Predict Account smart-wallet address from the deposit page.
+The user-facing advanced mode is `predict-account + vault`, not a standalone `mandated-vault` mode.
 
-### mandated-vault mode (default bootstrap flow)
+Use the canonical template:
+
+```dotenv
+PREDICT_ENV=mainnet
+PREDICT_API_BASE_URL=https://api.predict.fun
+PREDICT_API_KEY=YOUR_PREDICT_API_KEY
+PREDICT_WALLET_MODE=predict-account
+PREDICT_ACCOUNT_ADDRESS=0xYOUR_PREDICT_ACCOUNT
+PREDICT_PRIVY_PRIVATE_KEY=0xYOUR_PRIVY_EXPORTED_KEY
+ERC_MANDATED_VAULT_ADDRESS=0xYOUR_DEPLOYED_VAULT
+ERC_MANDATED_VAULT_ASSET_ADDRESS=0xYOUR_ASSET
+ERC_MANDATED_VAULT_AUTHORITY=0xYOUR_AUTHORITY
+ERC_MANDATED_AUTHORITY_PRIVATE_KEY=0xYOUR_VAULT_AUTHORITY_KEY
+ERC_MANDATED_MCP_COMMAND=erc-mandated-mcp
+ERC_MANDATED_CONTRACT_VERSION=v0.3.0-agent-contract
+ERC_MANDATED_CHAIN_ID=56
+```
+
+If the vault does not exist yet, run the bootstrap helper first.
+
+### Internal bootstrap subflow (`mandated-vault`)
+
+The older `mandated-vault` path remains only as the internal/bootstrap compatibility subflow used to create or prepare a vault before returning to `predict-account + vault`.
 
 ```dotenv
 PREDICT_ENV=mainnet
@@ -173,7 +202,7 @@ ERC_MANDATED_MCP_COMMAND=erc-mandated-mcp
 ERC_MANDATED_CHAIN_ID=56
 ```
 
-This is now the normal pure `mandated-vault` onboarding path. PredictClaw uses the fixed product factory `0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6`, derives the signer address from `PREDICT_EOA_PRIVATE_KEY`, previews first, requires explicit confirmation, and returns a manual env block instead of auto-editing `.env`.
+PredictClaw uses the fixed product factory `0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6`, previews first, requires explicit confirmation, and backfills `.env` with the deployed vault address and resolved values.
 
 On `--confirm`, PredictClaw automatically enables the MCP broadcast gate for that subprocess and bridges the bootstrap signer key. The standard flow does not require manually setting `ERC_MANDATED_ENABLE_BROADCAST=1` or `ERC_MANDATED_BOOTSTRAP_PRIVATE_KEY`, but it no longer auto-edits `.env`.
 
@@ -189,7 +218,11 @@ Confirm and broadcast:
 cd {baseDir} && uv run python scripts/predictclaw.py wallet bootstrap-vault --confirm --json
 ```
 
-### mandated-vault manual path (explicit deployed vault)
+### Internal bootstrap compatibility paths
+
+If you intentionally need the internal bootstrap path directly, the following compatibility variants remain:
+
+#### Explicit deployed vault
 
 ```dotenv
 PREDICT_ENV=mainnet
@@ -201,7 +234,7 @@ ERC_MANDATED_MCP_COMMAND=erc-mandated-mcp
 ERC_MANDATED_CHAIN_ID=56
 ```
 
-### mandated-vault manual path (predicted / undeployed vault)
+#### Predicted / undeployed vault
 
 ```dotenv
 PREDICT_ENV=mainnet
@@ -253,10 +286,12 @@ The optional `ERC_MANDATED_FUNDING_*` envs cap Vault→Predict transfers by per-
 
 ## Wallet-mode contract
 
+PredictClaw exposes four user-facing modes.
+
 - `read-only` — browse market data only; no signer-backed wallet actions.
 - `eoa` — direct signer path for wallet, trade, and funding flows.
 - `predict-account` — smart-wallet funding/trading path using `PREDICT_ACCOUNT_ADDRESS` plus `PREDICT_PRIVY_PRIVATE_KEY`.
-- `mandated-vault` — advanced explicit opt-in control-plane path for protected vault-only status/deposit flows.
+- `predict-account + vault` — user-facing advanced route where Predict Account remains the trading identity and Vault acts as the advanced funding source.
 
 ## How to answer funding-address questions
 
@@ -274,12 +309,12 @@ The optional `ERC_MANDATED_FUNDING_*` envs cap Vault→Predict transfers by per-
 - `wallet status requires signer configuration`.
 - `eoa` requires `PREDICT_EOA_PRIVATE_KEY` and rejects Predict Account or mandated-vault inputs.
 - `predict-account` requires both `PREDICT_ACCOUNT_ADDRESS` and `PREDICT_PRIVY_PRIVATE_KEY`.
-- `wallet deposit` is a funding-guidance command: it separates the manual top-up address, the Predict Account recipient / trading identity, and the orchestration vault metadata for the active signer mode.
-- `wallet bootstrap-vault` is the pure mandated-vault preview / confirmation command.
+- `wallet deposit` shows the funding address for the active signer mode.
+- `wallet bootstrap-vault` is the helper used during `predict-account + vault` onboarding when a vault still needs to be created or prepared.
 - `wallet redeem-vault --preview --json` inspects vault-share redeemability before any real redeem flow is attempted.
 - Redeem preview returns machine-readable `redeemableNow`, `blockingReason`, and `contractError` fields, including contract errors such as `ERC4626ExceededMaxRedeem`.
 - `wallet withdraw` performs safety validation before any transfer logic.
-- In pure `mandated-vault`, `wallet status` and `wallet bootstrap-vault` are the intended v1 entry points.
+- `mandated-vault` remains only as an internal/bootstrap compatibility path and is not a standalone user mode.
 - Default bootstrap only needs the signer EOA, deployment fee funding, and any optional `ERC_MANDATED_FUNDING_*` amount caps.
 - In `predict-account + ERC_MANDATED_*` overlay, `wallet status` / `wallet deposit` expose `manualTopUpAddress`, `tradingIdentityAddress`, `orchestrationVaultAddress`, and `vault-to-predict-account` funding semantics while Predict Account remains the trade identity.
 - Vault-related JSON also exposes `vaultAuthority`, `vaultExecutor`, `bootstrapSigner`, `allowedTokenAddresses`, and `allowedRecipients` so OpenClaw can reason about configured permissions.

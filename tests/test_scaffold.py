@@ -13,11 +13,13 @@ REQUIRED_LAYOUT = {
     "template.readonly.env",
     "template.eoa.env",
     "template.predict-account.env",
+    "template.predict-account-vault.env",
     "template.mandated-vault.env",
     ".env.example",
     ".env.readonly.example",
     ".env.eoa.example",
     ".env.predict-account.example",
+    ".env.predict-account-vault.example",
     ".env.mandated-vault.example",
     "README.md",
     "lib/__init__.py",
@@ -89,6 +91,7 @@ def test_default_env_example_is_bootstrap_safe_for_first_install() -> None:
     assert "template.readonly.env" in env_text
     assert "template.eoa.env" in env_text
     assert "template.predict-account.env" in env_text
+    assert "template.predict-account-vault.env" in env_text
     assert "template.mandated-vault.env" in env_text
     assert "PREDICT_SMOKE_ENV=testnet" not in env_text
     assert "PREDICT_SMOKE_API_BASE_URL=https://api-testnet.predict.fun" not in env_text
@@ -101,6 +104,7 @@ def test_live_templates_are_mainnet_first() -> None:
         "template.readonly.env",
         "template.eoa.env",
         "template.predict-account.env",
+        "template.predict-account-vault.env",
         "template.mandated-vault.env",
     ]
 
@@ -118,6 +122,7 @@ def test_legacy_dotenv_examples_match_publish_safe_templates() -> None:
         ".env.readonly.example": "template.readonly.env",
         ".env.eoa.example": "template.eoa.env",
         ".env.predict-account.example": "template.predict-account.env",
+        ".env.predict-account-vault.example": "template.predict-account-vault.env",
         ".env.mandated-vault.example": "template.mandated-vault.env",
     }
 

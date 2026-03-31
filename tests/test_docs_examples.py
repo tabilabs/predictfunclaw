@@ -267,6 +267,10 @@ def test_docs_explain_vault_as_default_funding_entry_for_overlay() -> None:
     assert "vault deposit flow" in readme_zh.lower()
     assert "补资入口" in readme_zh
     assert "交易身份" in readme_zh
+    assert (
+        "predict account 仍然是交易身份" in readme_zh.lower()
+        or "predict account 保持交易身份" in readme_zh.lower()
+    )
 
 
 def test_docs_explain_predictclaw_version_source_of_truth() -> None:

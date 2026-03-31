@@ -203,8 +203,91 @@ def test_wallet_deposit_help_documents_funding_semantics() -> None:
     combined = result.stdout + result.stderr
     assert "funding guidance" in combined.lower()
     assert "predict account" in combined.lower()
+    assert "vault" in combined.lower()
     assert "bnb" in combined.lower()
     assert "usdt" in combined.lower()
+
+
+def test_wallet_deposit_overlay_text_uses_vault_as_default_funding_entry(
+    tmp_path: Path,
+) -> None:
+    patch_root = tmp_path / "wallet-deposit-overlay-patch"
+    patch_root.mkdir(parents=True, exist_ok=True)
+    (patch_root / "sitecustomize.py").write_text(
+        """
+from __future__ import annotations
+
+from types import SimpleNamespace
+import lib.funding_service as funding_service
+
+
+def _get_deposit_details(self):
+    return SimpleNamespace(
+        to_dict=lambda: {
+            'mode': 'predict-account',
+            'activeRoute': 'vault-to-predict-account',
+            'routePurpose': 'predict-account-top-up-and-trading',
+            'fundingRoute': 'vault-to-predict-account',
+            'fundingAddress': '0x2222222222222222222222222222222222222222',
+            'manualTopUpAddress': '0x2222222222222222222222222222222222222222',
+            'manualTopUpGuidance': 'Use the vault deposit flow as the default funding entry; the Predict Account remains the trading identity and receives vault-driven top-ups afterward.',
+            'predictAccountAddress': '0x1234567890123456789012345678901234567890',
+            'tradingIdentityAddress': '0x1234567890123456789012345678901234567890',
+            'tradeSignerAddress': '0x7777777777777777777777777777777777777777',
+            'orchestrationVaultAddress': '0x2222222222222222222222222222222222222222',
+            'vaultAddressSource': 'explicit',
+            'vaultExists': True,
+            'acceptedAssets': ['BNB', 'USDT'],
+            'permissionSummary': {
+                'vaultAuthority': '0x5555555555555555555555555555555555555555',
+                'vaultExecutor': '0x5555555555555555555555555555555555555555',
+                'bootstrapSigner': '0x7777777777777777777777777777777777777777',
+                'allowedTokenAddresses': ['0x4444444444444444444444444444444444444444'],
+                'allowedRecipients': ['0x1234567890123456789012345678901234567890'],
+            },
+            'sessionScope': 'generic-balance-top-up',
+            'sessionBinding': {'positionId': None, 'marketId': None},
+            'fundingOrchestration': {
+                'fundingTarget': {
+                    'currentBalanceRaw': '2000000000000000000',
+                    'requiredAmountRaw': '1000000000000000000',
+                    'fundingShortfallRaw': '1000000000000000000'
+                },
+                'fundingNextStep': {
+                    'task': {'summary': 'Fund the vault deposit flow first'}
+                }
+            }
+        }
+    )
+
+
+funding_service.FundingService.get_deposit_details = _get_deposit_details
+""".strip(),
+        encoding="utf-8",
+    )
+    env = {
+        "PREDICT_ENV": "mainnet",
+        "PREDICT_STORAGE_DIR": "/tmp/predict",
+        "PREDICT_WALLET_MODE": "predict-account",
+        "PREDICT_API_KEY": "test-api-key",
+        "PREDICT_ACCOUNT_ADDRESS": "0x1234567890123456789012345678901234567890",
+        "PREDICT_PRIVY_PRIVATE_KEY": "0x59c6995e998f97a5a0044976f4d060f5d89c8b8c7f11b9aa0dbf3f0f7c7c1e01",
+        "PYTHONPATH": f"{patch_root}{os.pathsep}" + os.environ.get("PYTHONPATH", ""),
+    }
+
+    result = run_wallet("deposit", env=env)
+
+    assert result.returncode == 0
+    combined = result.stdout + result.stderr
+    assert (
+        "Default Funding Entry (Vault Deposit): 0x2222222222222222222222222222222222222222"
+        in combined
+    )
+    assert "vault deposit flow" in combined.lower()
+    assert (
+        "Predict Account Recipient: 0x1234567890123456789012345678901234567890"
+        in combined
+    )
 
 
 def test_wallet_help_exposes_public_continuation_commands() -> None:

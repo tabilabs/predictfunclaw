@@ -53,8 +53,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Show manual top-up guidance, trading recipient, chain, and accepted assets.",
         description=(
             "Display funding guidance for the current mode. EOA mode deposits to the signer address directly. "
-            "Predict Account overlay mode separates the manual top-up address, the Predict Account trading recipient, "
-            "and the vault orchestration address so users do not mistake vault metadata for a manual funding target. "
+            "Predict Account + vault mode treats the Vault deposit flow as the default funding entry, while Predict Account "
+            "remains the trading recipient/identity and receives the downstream vault-driven top-up. "
             "BNB is required for gas and USDT is the supported trading asset."
         ),
     )
@@ -298,14 +298,16 @@ def _handle_status(args: argparse.Namespace) -> int:
     )
     if payload.get("fundingRoute") == "vault-to-predict-account":
         print(f"Funding Route: {payload.get('fundingRoute')}")
-        print(f"Manual Top-Up Address: {payload.get('manualTopUpAddress')}")
+        print(
+            f"Default Funding Entry (Vault Deposit): {payload.get('manualTopUpAddress')}"
+        )
         print(f"Predict Account Recipient: {payload.get('predictAccountAddress')}")
         print(f"Trading Identity Address: {payload.get('tradingIdentityAddress')}")
         print(f"Trade Signer Address: {payload.get('tradeSignerAddress')}")
         print(
             f"Orchestration Vault Address: {payload.get('orchestrationVaultAddress')} ({payload.get('vaultAddressSource', 'unknown')})"
         )
-        print(f"Manual Top-Up Guidance: {payload.get('manualTopUpGuidance')}")
+        print(f"Funding Guidance: {payload.get('manualTopUpGuidance')}")
         for line in _overlay_human_next_steps(payload):
             print(line)
     return 0
@@ -380,14 +382,16 @@ def _handle_deposit(args: argparse.Namespace) -> int:
             print(f"Linked Position ID: {session_binding.get('positionId')}")
             print(f"Linked Market ID: {session_binding.get('marketId')}")
         print(f"Funding Route: {payload['fundingRoute']}")
-        print(f"Manual Top-Up Address: {payload.get('manualTopUpAddress')}")
+        print(
+            f"Default Funding Entry (Vault Deposit): {payload.get('manualTopUpAddress')}"
+        )
         print(f"Predict Account Recipient: {payload['predictAccountAddress']}")
         print(f"Trading Identity Address: {payload.get('tradingIdentityAddress')}")
         print(f"Trade Signer Address: {payload['tradeSignerAddress']}")
         print(
             f"Orchestration Vault Address: {payload.get('orchestrationVaultAddress')} ({payload.get('vaultAddressSource', 'unknown')})"
         )
-        print(f"Manual Top-Up Guidance: {payload.get('manualTopUpGuidance')}")
+        print(f"Funding Guidance: {payload.get('manualTopUpGuidance')}")
         for line in _overlay_human_next_steps(payload):
             print(line)
         print(f"Vault Exists: {'yes' if payload.get('vaultExists') else 'no'}")

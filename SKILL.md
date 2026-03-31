@@ -295,10 +295,10 @@ PredictClaw exposes four user-facing modes.
 
 ## How to answer funding-address questions
 
-- In `predict-account` mode, including `predict-account + ERC_MANDATED_*` overlay, the default user-facing answer is the Predict Account deposit address itself. That address is `PREDICT_ACCOUNT_ADDRESS`, `manualTopUpAddress`, and the `wallet deposit` recipient.
-- For the current product UI, source that address from `https://predict.fun/account/deposit`.
-- In pure `mandated-vault`, answer in terms of the active route: governance/automation flows fund the vault first, then move assets from Vault to Predict Account as a separate funding step.
-- Do not answer with one global address rule. Always answer according to the current wallet mode.
+- In `predict-account + vault`, the default user-facing answer is the Vault deposit flow.
+- Predict Account remains the trading identity and receives the downstream vault-driven top-up afterward.
+- `wallet deposit --json` / `wallet status --json` therefore distinguish the default funding entry (`manualTopUpAddress` / `fundingAddress`) from the trading identity (`predictAccountAddress`, `tradingIdentityAddress`).
+- Only answer with the Predict Account deposit address when the active route is plain `predict-account` without the vault overlay.
 
 ## First-time setup
 
@@ -309,7 +309,7 @@ PredictClaw exposes four user-facing modes.
 - `wallet status requires signer configuration`.
 - `eoa` requires `PREDICT_EOA_PRIVATE_KEY` and rejects Predict Account or mandated-vault inputs.
 - `predict-account` requires both `PREDICT_ACCOUNT_ADDRESS` and `PREDICT_PRIVY_PRIVATE_KEY`.
-- `wallet deposit` shows the funding address for the active signer mode.
+- `wallet deposit` shows the default funding entry for the active signer mode.
 - `wallet bootstrap-vault` is the helper used during `predict-account + vault` onboarding when a vault still needs to be created or prepared.
 - `wallet redeem-vault --preview --json` inspects vault-share redeemability before any real redeem flow is attempted.
 - Redeem preview returns machine-readable `redeemableNow`, `blockingReason`, and `contractError` fields, including contract errors such as `ERC4626ExceededMaxRedeem`.
@@ -317,6 +317,7 @@ PredictClaw exposes four user-facing modes.
 - `mandated-vault` remains only as an internal/bootstrap compatibility path and is not a standalone user mode.
 - Default bootstrap only needs the signer EOA, deployment fee funding, and any optional `ERC_MANDATED_FUNDING_*` amount caps.
 - In `predict-account + ERC_MANDATED_*` overlay, `wallet status` / `wallet deposit` expose `manualTopUpAddress`, `tradingIdentityAddress`, `orchestrationVaultAddress`, and `vault-to-predict-account` funding semantics while Predict Account remains the trade identity.
+- In that route, the default funding ingress is the Vault deposit flow, not the Predict Account address.
 - Vault-related JSON also exposes `vaultAuthority`, `vaultExecutor`, `bootstrapSigner`, `allowedTokenAddresses`, and `allowedRecipients` so OpenClaw can reason about configured permissions.
 - Overlay `buy` can proceed when the Predict Account balance is sufficient; otherwise it returns deterministic `funding-required` guidance that points to `wallet deposit --json`.
 - Pure `mandated-vault` needs a working `ERC_MANDATED_MCP_COMMAND`; in overlay mode the default path is an explicit `ERC_MANDATED_VAULT_ADDRESS`, with asset/authority metadata resolved automatically where possible and only escalated to manual fields when that resolution fails.

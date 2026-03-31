@@ -169,7 +169,7 @@ def print_help() -> None:
         "  - `wallet bootstrap-vault --confirm` auto-bridges the execute-only MCP broadcast gate and bootstrap signer env for that subprocess."
     )
     print(
-        "  - wallet status/deposit JSON expose manualTopUpAddress, tradingIdentityAddress, orchestrationVaultAddress, vaultAuthority, vaultExecutor, bootstrapSigner, allowedTokenAddresses, and allowedRecipients when vault permissions are configured."
+        "  - wallet status/deposit JSON expose manualTopUpAddress, fundingAddress, tradingIdentityAddress, orchestrationVaultAddress, vaultAuthority, vaultExecutor, bootstrapSigner, allowedTokenAddresses, and allowedRecipients when vault permissions are configured."
     )
     print(
         "  - wallet redeem-vault is preview-only and reports redeemableNow/blockingReason before any future redeem execution path."
@@ -181,7 +181,10 @@ def print_help() -> None:
         "  - Product default factory is 0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6, and confirmed bootstrap backfills the local .env with the deployed vault address and resolved values."
     )
     print(
-        "  - Overlay wallet status/deposit expose `vault-to-predict-account` routing with explicit manual top-up vs orchestration-vault roles: Predict Account stays the trading identity while Vault funds it, and undeployed vault setup remains manual-only."
+        "  - Overlay wallet status/deposit treat the Vault deposit flow as the default funding ingress while Predict Account stays the trading identity, and undeployed vault setup remains manual-only."
+    )
+    print(
+        "  - The internal funding route identifier for this pattern remains `vault-to-predict-account`."
     )
     print(
         "  - Trust boundary: the MCP orchestrates transport/preparation; the vault contract policy authorizes what execution is allowed."

@@ -541,7 +541,7 @@ class FundingService:
                     )
                 return DepositDetails(
                     mode=str(getattr(sdk.mode, "value", sdk.mode)),
-                    funding_address=sdk.funding_address,
+                    funding_address=orchestration.vault_address,
                     signer_address=sdk.signer_address,
                     chain=sdk.chain_name,
                     accepted_assets=["BNB", "USDT"],

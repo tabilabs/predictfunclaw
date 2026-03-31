@@ -250,6 +250,25 @@ def test_docs_make_overlay_onboarding_vault_presence_first() -> None:
     assert "只有在自动解析失败时" in readme_zh
 
 
+def test_docs_explain_vault_as_default_funding_entry_for_overlay() -> None:
+    predict_root = get_predict_root()
+    readme = (predict_root / "README.md").read_text()
+    skill = (predict_root / "SKILL.md").read_text()
+    readme_zh = (predict_root / "README.zh-CN.md").read_text()
+
+    for text in [readme, skill]:
+        assert "vault deposit flow" in text.lower()
+        assert "predict account remains the trading identity" in text.lower()
+        assert (
+            "default funding ingress" in text.lower()
+            or "default funding entry" in text.lower()
+        )
+
+    assert "vault deposit flow" in readme_zh.lower()
+    assert "补资入口" in readme_zh
+    assert "交易身份" in readme_zh
+
+
 def test_docs_explain_predictclaw_version_source_of_truth() -> None:
     predict_root = get_predict_root()
     readme = (predict_root / "README.md").read_text()

@@ -782,10 +782,10 @@ def _overlay_address_guidance_payload(
     vault_address: str | None,
 ) -> dict[str, object]:
     return {
-        "manualTopUpAddress": predict_account_address,
+        "manualTopUpAddress": vault_address,
         "manualTopUpGuidance": (
-            "Send supported assets to the Predict Account address for manual top-ups; "
-            "the vault address is orchestration metadata only."
+            "Use the vault deposit flow as the default funding entry; the Predict Account "
+            "remains the trading identity and receives vault-driven top-ups afterward."
         ),
         "tradingIdentityAddress": predict_account_address,
         "orchestrationVaultAddress": vault_address,
@@ -1505,7 +1505,7 @@ class WalletManager:
                 return WalletStatusSnapshot(
                     mode=sdk.mode.value,
                     signer_address=sdk.signer_address,
-                    funding_address=sdk.funding_address,
+                    funding_address=orchestration.vault_address,
                     chain=sdk.chain_name,
                     bnb_balance_wei=bnb_balance,
                     usdt_balance_wei=usdt_balance,

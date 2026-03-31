@@ -383,10 +383,12 @@ PredictClaw 只对外暴露四种用户模式：
 
 ### 当用户问“充值地址是什么”时应如何回答
 
-- 如果当前模式是 `predict-account`（包括 `predict-account + ERC_MANDATED_*` overlay），面向用户的默认回答是：直接充值 Predict Account 的 deposit 地址。在 PredictClaw 语义里，它就是 `PREDICT_ACCOUNT_ADDRESS`、`manualTopUpAddress`，也是 `wallet deposit` 返回的接收地址。
-- 结合当前产品页面，这个地址应来自 `https://predict.fun/account/deposit`。
-- 如果当前模式是 pure `mandated-vault`，那就是 vault control-plane 路线。此时面向治理 / 自动化的回答应是：先给 vault 充值，再通过 Vault->Predict 的 funding step 给 Predict Account 补资。
-- 也就是说，当用户询问“充值地址”时，文档和回答都应该结合当前模式给出，而不是给一个全局唯一答案。
+- 在 `predict-account + vault` 中，面向用户的默认回答应是：先走 Vault deposit flow。
+- Predict Account 继续保持交易身份，后续再接受由 Vault 驱动的补资。
+- 因此 `wallet deposit --json` / `wallet status --json` 需要区分：
+  - 默认补资入口（`manualTopUpAddress` / `fundingAddress`）-> Vault
+  - 交易身份 / 最终收款目标（`predictAccountAddress`、`tradingIdentityAddress`）-> Predict Account
+- 只有在 plain `predict-account`（不带 vault overlay）时，才默认回答 Predict Account deposit 地址。
 
 ### 内部 bootstrap 说明
 
@@ -458,7 +460,7 @@ uv run python scripts/predictclaw.py hedge analyze 101 202 --json
 ## 核心工作流说明
 
 - `wallet status` 会报告 signer mode、funding guidance、余额和 approval readiness。
-- `wallet deposit` 是一个资金引导命令：它会分开展示手动 top-up 地址、Predict Account 收款/交易身份，以及 orchestration vault 元数据，并给出可接受资产（`BNB`、`USDT`）。
+- `wallet deposit` 是一个资金引导命令：在 `predict-account + vault` 中，它会把 Vault deposit flow 作为默认补资入口，同时继续分开展示 Predict Account 收款/交易身份和 orchestration vault 元数据，并给出可接受资产（`BNB`、`USDT`）。
 - `wallet bootstrap-vault` 是 pure mandated-vault 的预览 / 确认入口。
 - 默认 bootstrap 流程会使用固定 factory `0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6`，并在确认成功后返回可手动复制的 env block。
 - `wallet redeem-vault --preview --json` 会预检 vault share 赎回，并返回 `redeemableNow`、`blockingReason` 以及像 `ERC4626ExceededMaxRedeem` 这样的合约错误。
@@ -472,9 +474,9 @@ uv run python scripts/predictclaw.py hedge analyze 101 202 --json
   - `orchestrationVaultAddress`
   - `vaultAddress`
   - `fundingRoute = vault-to-predict-account`
-- 手动 top-up 的目标是 Predict Account 地址，而不是 vault 合约地址。
-- Predict Account remains 入金地址与交易账户。
-- 资金目标是 Predict Account，而不是 Vault，也不是 owner EOA。
+- 默认补资入口是 Vault deposit flow。
+- Predict Account 继续是交易身份 / 下单账户。
+- 内部 orchestration 的最终资金目标仍然是 Predict Account，但用户-facing 的补资入口是 Vault。
 - 可选的 Vault funding-policy 环境变量允许你限制 Vault→Predict 转账的单笔额度、窗口累计额度和窗口时长。
 - 与 vault 相关的 JSON 现在还会提供 `vaultAuthority`、`vaultExecutor`、`bootstrapSigner`、`allowedTokenAddresses`、`allowedRecipients`，方便用户和 OpenClaw 直接理解权限边界。
 - 这些 funding-policy 金额使用 raw token units；以 BSC mainnet USDT（18 decimals）为例：`5 U = 5000000000000000000`，`10 U = 10000000000000000000`。

@@ -811,6 +811,13 @@ def test_wallet_deposit_predict_account_with_vault_overlay_exposes_route_and_pla
     assert payload["activeRoute"] == "vault-to-predict-account"
     assert payload["routePurpose"] == "predict-account-top-up-and-trading"
     assert payload["fundingRoute"] == "vault-to-predict-account"
+    assert payload["fundingAddress"] == "0x2222222222222222222222222222222222222222"
+    assert payload["manualTopUpAddress"] == "0x2222222222222222222222222222222222222222"
+    assert (
+        payload["orchestrationVaultAddress"]
+        == "0x2222222222222222222222222222222222222222"
+    )
+    assert "vault deposit" in payload["manualTopUpGuidance"].lower()
     assert (
         payload["predictAccountAddress"] == "0x1234567890123456789012345678901234567890"
     )
@@ -956,6 +963,8 @@ def test_wallet_deposit_overlay_can_resolve_asset_and_authority_from_vault_addre
     payload = service.get_deposit_details().to_dict()
 
     assert payload["activeRoute"] == "vault-to-predict-account"
+    assert payload["fundingAddress"] == "0x2222222222222222222222222222222222222222"
+    assert payload["manualTopUpAddress"] == "0x2222222222222222222222222222222222222222"
     assert payload["vaultAddress"] == "0x2222222222222222222222222222222222222222"
     permission_summary = cast(dict[str, Any], payload["permissionSummary"])
     assert (

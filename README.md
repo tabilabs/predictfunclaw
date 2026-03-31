@@ -381,10 +381,12 @@ This is the default route for the Predict Account trading-identity workflow. It 
 
 ### How to answer "what address should I fund?"
 
-- If the active mode is `predict-account` (including `predict-account + ERC_MANDATED_*` overlay), the default user-facing answer is: fund the Predict Account deposit address directly. In PredictClaw terms, that is `PREDICT_ACCOUNT_ADDRESS`, `manualTopUpAddress`, and the `wallet deposit` recipient.
-- For the current product UI, use `https://predict.fun/account/deposit` for that address.
-- If the active mode is pure `mandated-vault`, the route is vault control-plane first. In that mode, the advanced automation/governance answer is: fund the vault first, then use Vault->Predict funding to top up the Predict Account.
-- When a user asks for the funding address, always answer in terms of the current mode instead of giving one global address rule.
+- In `predict-account + vault`, the default user-facing answer is: fund the Vault deposit flow first.
+- Predict Account remains the trading identity and receives the downstream vault-driven top-up afterward.
+- `wallet deposit --json` / `wallet status --json` therefore distinguish:
+  - the default funding entry (`manualTopUpAddress` / `fundingAddress`) -> Vault
+  - the trading identity / recipient (`predictAccountAddress`, `tradingIdentityAddress`) -> Predict Account
+- Only answer with the Predict Account deposit page when the active route is plain `predict-account` without the vault funding overlay.
 
 ### Internal bootstrap note
 
@@ -456,7 +458,7 @@ uv run python scripts/predictclaw.py hedge analyze 101 202 --json
 ## Core workflow notes
 
 - `wallet status` reports signer mode, funding guidance, balances, and approval readiness.
-- `wallet deposit` is a funding-guidance command: it shows the manual top-up address, the Predict Account recipient / trading identity, and the orchestration vault metadata separately, plus accepted assets (`BNB`, `USDT`).
+- `wallet deposit` is a funding-guidance command: in `predict-account + vault`, it shows the Vault deposit flow as the default funding entry, while still separating the Predict Account recipient / trading identity and the orchestration vault metadata.
 - `wallet bootstrap-vault` is the pure mandated-vault preview / confirmation entry point.
 - The default bootstrap flow uses the fixed factory `0x6eFC613Ece5D95e4a7b69B4EddD332CeeCbb61c6` and backfills `.env` after a confirmed deployment.
 - `wallet redeem-vault --preview --json` previews vault-share redemption and reports `redeemableNow`, `blockingReason`, and decoded contract errors such as `ERC4626ExceededMaxRedeem`.
@@ -470,9 +472,9 @@ uv run python scripts/predictclaw.py hedge analyze 101 202 --json
   - `orchestrationVaultAddress`
   - `vaultAddress`
   - `fundingRoute = vault-to-predict-account`
-- Manual top-ups go to the Predict Account address, not the vault contract address.
-- Predict Account remains the deposit address / trading account.
-- The funding target is the Predict Account, not the Vault and not the owner EOA.
+- Default funding now goes through the Vault deposit flow.
+- Predict Account remains the trading identity / order account.
+- The internal orchestration target remains the Predict Account, but the user-facing funding ingress is the Vault.
 - Optional Vault funding-policy envs let you cap Vault→Predict transfers by per-tx amount, cumulative window amount, and window duration.
 - Vault-related JSON now also surfaces `vaultAuthority`, `vaultExecutor`, `bootstrapSigner`, `allowedTokenAddresses`, and `allowedRecipients` so users and OpenClaw can reason about permissions directly.
 - Those funding-policy amounts use raw token units; for BSC mainnet USDT (18 decimals), `5 U = 5000000000000000000` and `10 U = 10000000000000000000`.
